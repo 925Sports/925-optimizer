@@ -638,7 +638,7 @@
 
         // ==================== DATA LOADING & PREP ====================
         async function loadAllData() {
-            contentDiv.innerHTML = '<div class="loading">Loading NBA, WNBA & MLB data + game logs...<br><span style="font-size:12px;color:#888;">This may take a few seconds on first load</span></div>';
+            contentDiv.innerHTML = '<div class="loading">Loading prop data...<br><span style="font-size:12px;color:#888;">Game logs will load when you open a player</span></div>';
 
             // ==================== GAME LOG CONFIG (Phase 2) ====================
             // Priority: Local data/ folder > Remote URL
@@ -663,21 +663,14 @@
                 const results = await Promise.allSettled([
                     fetch(urls.nba.pp).then(r => r.ok ? r.text() : Promise.reject('NBA CSV missing')),
                     fetch(urls.wnba.pp).then(r => r.ok ? r.text() : Promise.reject('WNBA CSV missing')),
-                    fetch(urls.mlb.pp).then(r => r.ok ? r.text() : Promise.reject('MLB CSV missing')),
-                    fetch(urls.nba.logs).then(r => r.ok ? r.text() : '').catch(() => ''),
-                    fetch(urls.wnba.logs).then(r => r.ok ? r.text() : '').catch(() => ''),
-                    fetch(urls.mlb.logs).then(r => r.ok ? r.text() : '').catch(() => '')
+                    fetch(urls.mlb.pp).then(r => r.ok ? r.text() : Promise.reject('MLB CSV missing'))
                 ]);
 
-                const [nbaRes, wnbaRes, mlbRes, nbaLogRes, wnbaLogRes, mlbLogRes] = results;
+                const [nbaRes, wnbaRes, mlbRes] = results;
 
                 if (nbaRes.status === 'fulfilled') dataStore.nba.allData = Papa.parse(nbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (wnbaRes.status === 'fulfilled') dataStore.wnba.allData = Papa.parse(wnbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (mlbRes.status === 'fulfilled') dataStore.mlb.allData = Papa.parse(mlbRes.value, { header: true, skipEmptyLines: true }).data;
-
-                if (nbaLogRes.status === 'fulfilled' && nbaLogRes.value) dataStore.nba.gameLogs = Papa.parse(nbaLogRes.value, { header: true, skipEmptyLines: true }).data;
-                if (wnbaLogRes.status === 'fulfilled' && wnbaLogRes.value) dataStore.wnba.gameLogs = Papa.parse(wnbaLogRes.value, { header: true, skipEmptyLines: true }).data;
-                if (mlbLogRes.status === 'fulfilled' && mlbLogRes.value) dataStore.mlb.gameLogs = Papa.parse(mlbLogRes.value, { header: true, skipEmptyLines: true }).data;
 
                 // Prepare each sport
                 ['nba', 'wnba', 'mlb'].forEach(sport => prepareSportData(sport));
@@ -697,7 +690,7 @@
                 // Show welcome if no data
                 const totalRows = dataStore.nba.allData.length + dataStore.wnba.allData.length + dataStore.mlb.allData.length;
                 if (totalRows === 0) {
-                    contentDiv.innerHTML = '<div class="loading" style="color:#f59e0b; max-width: 520px; margin: 40px auto; line-height: 1.5;">No data loaded.<br><br><strong>How to set up your data:</strong><br>1. Create a folder (example: <code>my-optimizer/</code>)<br>2. Put this HTML file inside it<br>3. Create a subfolder called <code>data/</code> inside that folder<br>4. Export your daily PrizePicks data as <code>prizepicks-nba.csv</code>, <code>prizepicks-wnba.csv</code>, and <code>prizepicks-mlb.csv</code> into the <code>data/</code> folder<br><br>Game log CSVs (optional) are fetched automatically from GitHub and improve the player popup stats.<br><br>This tool works completely locally — no GitHub upload required for the CSVs.</div>';
+                    contentDiv.innerHTML = '<div class="loading" style="color:#f59e0b; max-width: 520px; margin: 40px auto; line-height: 1.5;">No prop data loaded.<br><br><strong>How to set up your data:</strong><br>1. Put the 3 prop CSVs in a <code>data/</code> folder<br>2. Refresh the page<br><br>Game logs now load on-demand when you open a player (much faster initial load).</div>';
                 }
 
             } catch (err) {
@@ -726,29 +719,46 @@
             store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
             store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
 
-            // Precompute L5 stats for speed (critical performance improvement)
-            const logs = store.gameLogs || [];
+            // No heavy game log precomputation on initial load for speed.
+            // L5 stats + game logs are now calculated on-demand when user opens a player popup.
             data.forEach(row => {
-                const playerName = row['Player Name'] || row.Player || '';
-                let playerLogs = logs.filter(log => nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName));
-                playerLogs.sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
-
-                const recent = playerLogs.slice(0, 5);
-                const line = parseFloat(row['Line Score'] || row.Line || 0);
-                const betTag = (row['Bet Tag'] || 'over').toLowerCase();
-                const isOver = betTag.includes('over') || betTag.includes('more') || betTag.includes('↑');
-
-                let sum = 0, hits = 0;
-                recent.forEach(log => {
-                    const val = getStatValue(log, row['Stat Type'] || '', sport);
-                    sum += val;
-                    if ((isOver && val > line) || (!isOver && val < line)) hits++;
-                });
-
-                row._l5Avg = recent.length ? (sum / recent.length).toFixed(1) : 'N/A';
-                row._l5HitRate = recent.length ? ((hits / recent.length) * 100).toFixed(0) : 'N/A';
-                row._sport = sport; // ensure tag
+                row._sport = sport;
             });
+        }
+
+        // On-demand game log loader (key for fast initial load)
+        async function ensureGameLogsLoaded(sport) {
+            const store = dataStore[sport];
+            if (store.gameLogs && store.gameLogs.length > 0) return; // already loaded
+
+            // Try local first, then remote
+            const localUrl = `./data/${sport}_game_logs.csv`;
+            let gameLogText = '';
+
+            try {
+                const res = await fetch(localUrl);
+                if (res.ok) {
+                    gameLogText = await res.text();
+                } else {
+                    // Fallback to configured remote URL
+                    const remoteUrl = (sport === 'mlb') 
+                        ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv'
+                        : (sport === 'nba' 
+                            ? 'PASTE_YOUR_NBA_GAME_LOG_GOOGLE_SHEETS_CSV_URL_HERE' 
+                            : '');
+                    if (remoteUrl && remoteUrl !== 'PASTE_YOUR_NBA_GAME_LOG_GOOGLE_SHEETS_CSV_URL_HERE') {
+                        const remoteRes = await fetch(remoteUrl);
+                        if (remoteRes.ok) gameLogText = await remoteRes.text();
+                    }
+                }
+            } catch (e) {
+                console.warn(`Could not load game logs for ${sport}`, e);
+            }
+
+            if (gameLogText) {
+                store.gameLogs = Papa.parse(gameLogText, { header: true, skipEmptyLines: true }).data;
+                console.log(`Loaded ${store.gameLogs.length} game logs for ${sport}`);
+            }
         }
 
         function initCurrentSport() {
@@ -1245,9 +1255,13 @@
 
         // ==================== PLAYER POPUP ====================
         let currentPopupSport = 'nba';
-        function showPlayerPopup(row, index, sport) {
+        async function showPlayerPopup(row, index, sport) {
             currentPopupSport = sport;
             currentRowIndex = index;
+
+            // Load game logs on demand (this is the key speed improvement)
+            await ensureGameLogsLoaded(sport);
+
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
             popup.style.display = 'block';
