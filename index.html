@@ -1212,7 +1212,8 @@
         // ==================== ALL VIEW ====================
         function renderAllView() {
             contentDiv.innerHTML = '';
-            contentDiv.classList.remove('table-view');
+            contentDiv.className = ''; // full reset to avoid leftover styles from normal view
+            contentDiv.style.cssText = '';
 
             let allRows = [];
             ['nba', 'wnba', 'mlb'].forEach(s => {
@@ -1244,9 +1245,9 @@
             contentDiv.appendChild(header);
 
             const grid = document.createElement('div');
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;padding:8px 24px 30px;';
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;padding:12px 24px 40px;width:100%;';
             
-            allRows.slice(0, 120).forEach((row, idx) => { // limit for perf
+            allRows.slice(0, 200).forEach((row, idx) => { // limit for perf
                 const card = createPlayerCard(row, idx, row._sport);
                 grid.appendChild(card);
             });
