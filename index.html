@@ -514,9 +514,9 @@
         // ==================== GLOBAL STATE ====================
         let currentSport = 'all';
         let dataStore = {
-            nba: { allData: [], gameLogs: [], currentTab: 'All', currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            wnba: { allData: [], gameLogs: [], currentTab: 'All', currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            mlb: { allData: [], gameLogs: [], currentTab: 'All', currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
+            nba: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            wnba: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            mlb: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
         };
         let selectedBets = []; // SHARED across all sports
         let currentFiltered = [];
@@ -744,9 +744,9 @@
                     const remoteUrl = (sport === 'mlb') 
                         ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv'
                         : (sport === 'nba' 
-                            ? 'PASTE_YOUR_NBA_GAME_LOG_GOOGLE_SHEETS_CSV_URL_HERE' 
-                            : '');
-                    if (remoteUrl && remoteUrl !== 'PASTE_YOUR_NBA_GAME_LOG_GOOGLE_SHEETS_CSV_URL_HERE') {
+                            ? './data/nba_game_logs.csv' 
+                            : './data/wnba_game_logs.csv');
+                    if (remoteUrl) {
                         const remoteRes = await fetch(remoteUrl);
                         if (remoteRes.ok) gameLogText = await remoteRes.text();
                     }
@@ -805,19 +805,39 @@
 
             const store = dataStore[currentSport];
             const data = store.allData || [];
-            let statTypes = ['All', ...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
+            let statTypes = [...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
 
             // Limit to most common for cleanliness
-            if (statTypes.length > 12) statTypes = statTypes.slice(0, 12);
+            if (statTypes.length > 14) statTypes = statTypes.slice(0, 14);
 
-            statTypes.forEach((tab, idx) => {
+            // "All" button clears selection
+            const allBtn = document.createElement('div');
+            allBtn.className = `tab ${store.selectedStatTypes.size === 0 ? 'active' : ''}`;
+            allBtn.textContent = 'All';
+            allBtn.onclick = () => {
+                store.selectedStatTypes.clear();
+                document.querySelectorAll('#tabs .tab').forEach(t => t.classList.remove('active'));
+                allBtn.classList.add('active');
+                renderContent();
+            };
+            tabsDiv.appendChild(allBtn);
+
+            statTypes.forEach(stat => {
                 const btn = document.createElement('div');
-                btn.className = `tab ${tab === store.currentTab ? 'active' : ''}`;
-                btn.textContent = tab;
+                const isActive = store.selectedStatTypes.has(stat);
+                btn.className = `tab ${isActive ? 'active' : ''}`;
+                btn.textContent = stat;
                 btn.onclick = () => {
-                    document.querySelectorAll('#tabs .tab').forEach(t => t.classList.remove('active'));
-                    btn.classList.add('active');
-                    store.currentTab = tab;
+                    if (store.selectedStatTypes.has(stat)) {
+                        store.selectedStatTypes.delete(stat);
+                        btn.classList.remove('active');
+                    } else {
+                        store.selectedStatTypes.add(stat);
+                        btn.classList.add('active');
+                    }
+                    // Deactivate "All" if any specific is selected
+                    const allTab = tabsDiv.querySelector('.tab');
+                    if (allTab) allTab.classList.remove('active');
                     renderContent();
                 };
                 tabsDiv.appendChild(btn);
@@ -897,9 +917,9 @@
             setTimeout(() => {
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
-                // Tab filter
-                if (store.currentTab !== 'All') {
-                    filtered = filtered.filter(row => (row['Stat Type'] || '').trim() === store.currentTab);
+                // Multi-select Stat Type filter
+                if (store.selectedStatTypes.size > 0) {
+                    filtered = filtered.filter(row => store.selectedStatTypes.has((row['Stat Type'] || '').trim()));
                 }
 
                 // Odds type
@@ -1269,7 +1289,8 @@
             overlay.style.display = 'block';
 
             // Header
-            document.getElementById('popupName').innerHTML = `${row['Player Name']} <span style="font-size:12px;color:#888;margin-left:6px;">${sport.toUpperCase()}</span>`;
+            const betTag = (row['Bet Tag'] || '').trim();
+            document.getElementById('popupName').innerHTML = `${row['Player Name']} <span style="font-size:12px;color:#888;margin-left:6px;">${sport.toUpperCase()}</span> ${betTag ? `<span style="font-size:11px;background:#333;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;">${betTag}</span>` : ''}`;
             document.getElementById('popupHeadshot').src = row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/64?text=?';
             document.getElementById('popupTeamPos').innerHTML = `${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}`;
             document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
@@ -1336,12 +1357,16 @@
             const lineScore = parseFloat(row['Line Score'] || row.Line || 0);
 
             if (tab === 'Overview') {
-                const recentText = row._l5Avg !== 'N/A' ? `L5 Avg: ${row._l5Avg} | L5 Hit Rate: ${row._l5HitRate}%` : 'Recent form data not available';
+                // Only show L5 info if we have real data (hide undefined)
+                let recentTextHTML = '';
+                if (row._l5Avg && row._l5Avg !== 'N/A' && row._l5HitRate && row._l5HitRate !== 'N/A') {
+                    recentTextHTML = `<div style="margin:8px 0 4px;font-size:13px;color:#888;">L5 Avg: ${row._l5Avg} | L5 Hit Rate: ${row._l5HitRate}%</div>`;
+                }
 
                 // Chart
                 const chartDiv = document.createElement('div');
                 chartDiv.id = 'chartContainer';
-                chartDiv.innerHTML = '<canvas id="projectionChart" style="max-height:220px;"></canvas>';
+                chartDiv.innerHTML = '<canvas id="projectionChart" style="max-height:280px; height:280px;"></canvas>';
                 content.appendChild(chartDiv);
 
                 const ctx = document.getElementById('projectionChart').getContext('2d');
@@ -1367,10 +1392,12 @@
                     }
                 });
 
-                const recentDiv = document.createElement('div');
-                recentDiv.style.cssText = 'margin-top:14px;padding:10px 14px;background:#222;border-radius:10px;font-size:14px;color:#00ffcc;font-weight:600;';
-                recentDiv.textContent = recentText;
-                content.appendChild(recentDiv);
+                if (recentTextHTML) {
+                    const recentDiv = document.createElement('div');
+                    recentDiv.style.cssText = 'margin-top:14px;padding:10px 14px;background:#222;border-radius:10px;font-size:14px;color:#00ffcc;font-weight:600;';
+                    recentDiv.innerHTML = recentTextHTML;
+                    content.appendChild(recentDiv);
+                }
 
                 // Bet buttons
                 const betDiv = document.createElement('div');
@@ -1436,7 +1463,27 @@
                 }, 40);
 
             } else if (tab === 'Splits') {
-                content.innerHTML = `<div style="padding:20px 10px;text-align:center;color:#888;">Splits analysis coming soon.<br>Uses last 20 games hit rate vs line.</div>`;
+                // Basic Splits view (L5 hit rate vs line)
+                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                const recent = logs.slice(0, 10);
+                const line = parseFloat(row['Line Score'] || row.Line || 0);
+                let hits = 0;
+                recent.forEach(log => {
+                    const val = getStatValue(log, row['Stat Type'] || '', sport);
+                    if (val > line) hits++;
+                });
+                const hitRate = recent.length > 0 ? ((hits / recent.length) * 100).toFixed(0) : 'N/A';
+                content.innerHTML = `
+                    <div style="padding:12px;">
+                        <h4 style="margin-bottom:8px;">Last 10 Games Splits</h4>
+                        <div style="background:#222;border-radius:8px;padding:12px 16px;">
+                            <div><strong>Line:</strong> ${line}</div>
+                            <div><strong>Hit Rate (Over):</strong> <span style="color:#00ffcc;font-weight:700;">${hitRate}%</span> (${hits}/${recent.length})</div>
+                            <div style="margin-top:8px;font-size:12px;color:#888;">Based on last 10 games with available data.</div>
+                        </div>
+                    </div>
+                `;
             } else if (tab === 'Other Bets') {
                 const others = (dataStore[sport].allData || []).filter(r => r['Player Name'] === playerName && r['Stat Type'] !== row['Stat Type']);
                 if (others.length === 0) {
