@@ -224,6 +224,26 @@
         .sport-badge.wnba { background: #f97316; }
         .sport-badge.mlb { background: #22c55e; }
 
+        /* Sport-colored headshot ring (lighter shades) - replaces text badge */
+        .headshot-wrapper {
+            position: relative;
+            width: 82px;
+            height: 82px;
+            margin: 10px auto;
+            border-radius: 50%;
+            padding: 3px; /* creates the ring effect */
+        }
+        .headshot-wrapper.nba { background: #a78bfa; }   /* lighter purple */
+        .headshot-wrapper.wnba { background: #fb923c; }  /* lighter orange */
+        .headshot-wrapper.mlb { background: #4ade80; }   /* lighter green */
+
+        .headshot-wrapper .headshot {
+            width: 100%;
+            height: 100%;
+            border: none;
+            margin: 0;
+        }
+
         .loading { text-align: center; padding: 30px; font-size: 16px; color: var(--accent); }
 
         /* Popups */
@@ -330,10 +350,10 @@
 
         <!-- Sport Tabs -->
         <div class="sport-tabs" id="sportTabs">
-            <button class="sport-tab active" data-sport="nba">NBA</button>
+            <button class="sport-tab" data-sport="nba">NBA</button>
             <button class="sport-tab" data-sport="wnba">WNBA</button>
             <button class="sport-tab" data-sport="mlb">MLB</button>
-            <button class="sport-tab" data-sport="all">All</button>
+            <button class="sport-tab active" data-sport="all">All</button>
         </div>
 
         <button onclick="showToolInfo()" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:9999px;font-size:12px;cursor:pointer;">How to use</button>
@@ -492,7 +512,7 @@
 
     <script>
         // ==================== GLOBAL STATE ====================
-        let currentSport = 'nba';
+        let currentSport = 'all';
         let dataStore = {
             nba: { allData: [], gameLogs: [], currentTab: 'All', currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
             wnba: { allData: [], gameLogs: [], currentTab: 'All', currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
@@ -517,13 +537,37 @@
         // ==================== UTILS ====================
         function normalizeName(name) {
             if (!name) return '';
-            return name.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+            let n = name.toLowerCase()
+                .replace(/[^a-z0-9\s]/g, ' ')           // keep spaces
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            // Common name normalizations (from original single-sport tools)
+            n = n.replace(/\bjr\b/g, '')
+                 .replace(/\bsr\b/g, '')
+                 .replace(/\biii\b/g, '')
+                 .replace(/\bii\b/g, '')
+                 .replace(/\s+/g, '');
+
+            return n;
         }
+
         function nameMatches(logName, playerName) {
             const n1 = normalizeName(logName);
             const n2 = normalizeName(playerName);
             if (!n1 || !n2) return false;
-            return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+            if (n1 === n2) return true;
+            if (n1.includes(n2) || n2.includes(n1)) return true;
+
+            // Extra fuzzy: last name match if first names are close
+            const parts1 = logName.toLowerCase().split(/\s+/);
+            const parts2 = playerName.toLowerCase().split(/\s+/);
+            if (parts1.length > 1 && parts2.length > 1) {
+                const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
+                const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
+                if (last1 && last2 && last1 === last2) return true;
+            }
+            return false;
         }
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
@@ -596,10 +640,23 @@
         async function loadAllData() {
             contentDiv.innerHTML = '<div class="loading">Loading NBA, WNBA & MLB data + game logs...<br><span style="font-size:12px;color:#888;">This may take a few seconds on first load</span></div>';
 
+            // ==================== GAME LOG CONFIG (Phase 2) ====================
+            // Priority: Local data/ folder > Remote URL
+            // For NBA game logs you are using Google Sheets — replace the nba.logs URL below with your published CSV link.
+            // MLB is using GitHub raw (as currently in play).
             const urls = {
-                nba: { pp: './data/prizepicks-nba.csv', logs: 'https://raw.githubusercontent.com/925Sports/nba-player-game-logs/main/nba_2026_season_game_logs.csv' },
-                wnba: { pp: './data/prizepicks-wnba.csv', logs: 'https://raw.githubusercontent.com/925Sports/wnba-player-game-logs/main/wnba_2026_season_game_logs.csv' },
-                mlb: { pp: './data/prizepicks-mlb.csv', logs: 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv' }
+                nba: { 
+                    pp: './data/prizepicks-nba.csv', 
+                    logs: './data/nba_game_logs.csv'   // Local first (recommended). Change to your Google Sheets published CSV if preferred.
+                },
+                wnba: { 
+                    pp: './data/prizepicks-wnba.csv', 
+                    logs: './data/wnba_game_logs.csv' 
+                },
+                mlb: { 
+                    pp: './data/prizepicks-mlb.csv', 
+                    logs: 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv' 
+                }
             };
 
             try {
@@ -632,7 +689,7 @@
                 } catch(e){}
 
                 // Initial render
-                currentSport = 'nba';
+                currentSport = 'all';
                 updateSportTabs();
                 initCurrentSport();
                 updateBetSlipCount();
@@ -958,15 +1015,14 @@
                 else if (selectedBet.choice === 'More') moreClass += ' selected selected-more';
             }
 
-            const sportBadge = `<div class="sport-badge ${sport}">${sport.toUpperCase()}</div>`;
-
             card.innerHTML = `
-                ${sportBadge}
                 ${icon}
                 <div class="header">
                     <span class="pop">${edge}</span>
                 </div>
-                <img class="headshot" src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/80?text=?'}" alt="${row['Player Name']}">
+                <div class="headshot-wrapper ${sport}">
+                    <img class="headshot" src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/80?text=?'}" alt="${row['Player Name']}">
+                </div>
                 <div class="team">${row.Team || ''} ${row.Position ? `- ${row.Position}` : ''}</div>
                 <div class="name">${row['Player Name']}</div>
                 <div class="game">${gameTime}</div>
