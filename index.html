@@ -572,22 +572,32 @@
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
             if (sport === 'mlb') {
-                const isPitcher = (log.position || '').toUpperCase().includes('P') || s.includes('pitcher') || s.includes('ip') || s.includes('er') || s.includes('strikeout');
+                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
+                                  s.includes('pitcher') || s.includes('ip') || s.includes('er') || 
+                                  s.includes('strikeout') || s.includes('earned run');
+
                 if (isPitcher) {
                     if (s.includes('innings') || s.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (s.includes('earned') || s.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
                     if (s.includes('strikeout') || s.includes('k') || s.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (s.includes('walk') || s.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || 0);
+                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (s.includes('h+r+rbi') || s.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                 } else {
+                    // Hitter logic
                     if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hits || log.H || 0);
                     if (s.includes('home run') || s.includes('hr')) return parseFloat(log.homeRuns || log.HR || 0);
                     if (s.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
                     if (s.includes('run') && !s.includes('rbi')) return parseFloat(log.runs || log.R || 0);
                     if (s.includes('ab') || s.includes('at bat')) return parseFloat(log.atBats || log.AB || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || 0);
-                    if (s.includes('h+r+rbi') || s.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
+                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (s.includes('h+r+rbi') || s.includes('hrrbi') || s.includes('hits+runs+rbis')) {
+                        return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
+                    }
+                    if (s.includes('walk') || s.includes('bb')) {
+                        return parseFloat(log.baseOnBalls || log.BB || 0);
+                    }
                 }
                 return 0;
             } else {
@@ -742,7 +752,7 @@
                 } else {
                     // Fallback to configured remote URL
                     const remoteUrl = (sport === 'mlb') 
-                        ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv'
+                        ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/refs/heads/main/mlb_2026_season_game_logs.csv'
                         : (sport === 'nba' 
                             ? './data/nba_game_logs.csv' 
                             : './data/wnba_game_logs.csv');
@@ -1463,24 +1473,52 @@
                 }, 40);
 
             } else if (tab === 'Splits') {
-                // Basic Splits view (L5 hit rate vs line)
+                // Improved Splits tab - closer to original MLB tool behavior
                 const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
-                const recent = logs.slice(0, 10);
+
                 const line = parseFloat(row['Line Score'] || row.Line || 0);
+                const isMore = (row['Bet Tag'] || '').toLowerCase().includes('more') || (row['Bet Tag'] || '').toLowerCase().includes('over');
+
+                // Use last 20 games like original
+                const recentLogs = logs.slice(0, 20);
+
                 let hits = 0;
-                recent.forEach(log => {
+                let htmlRows = '';
+
+                recentLogs.forEach(log => {
                     const val = getStatValue(log, row['Stat Type'] || '', sport);
-                    if (val > line) hits++;
+                    const hit = isMore ? (val > line) : (val < line);
+                    if (hit) hits++;
+
+                    const color = hit ? '#22c55e' : '#ef4444';
+                    htmlRows += `
+                        <tr>
+                            <td>${log.gameDate || log['GAME DATE'] || log.date || ''}</td>
+                            <td>${log.opponent || log.Opp || ''}</td>
+                            <td style="color:${color}; font-weight:600;">${val}</td>
+                            <td>${hit ? '✓' : '✗'}</td>
+                        </tr>
+                    `;
                 });
-                const hitRate = recent.length > 0 ? ((hits / recent.length) * 100).toFixed(0) : 'N/A';
+
+                const hitRate = recentLogs.length > 0 ? ((hits / recentLogs.length) * 100).toFixed(0) : 'N/A';
+
                 content.innerHTML = `
-                    <div style="padding:12px;">
-                        <h4 style="margin-bottom:8px;">Last 10 Games Splits</h4>
-                        <div style="background:#222;border-radius:8px;padding:12px 16px;">
-                            <div><strong>Line:</strong> ${line}</div>
-                            <div><strong>Hit Rate (Over):</strong> <span style="color:#00ffcc;font-weight:700;">${hitRate}%</span> (${hits}/${recent.length})</div>
-                            <div style="margin-top:8px;font-size:12px;color:#888;">Based on last 10 games with available data.</div>
+                    <div style="padding:12px 8px;">
+                        <h4 style="margin-bottom:6px;">Last 20 Games Splits vs Line</h4>
+                        <div style="margin-bottom:10px; font-size:14px;">
+                            <strong>Line:</strong> ${line} &nbsp;&nbsp; 
+                            <strong>Hit Rate:</strong> <span style="color:#00ffcc; font-weight:700;">${hitRate}%</span> (${hits}/${recentLogs.length})
+                        </div>
+                        <div class="table-wrapper" style="max-height:320px; overflow-y:auto;">
+                            <table style="font-size:12px; width:100%;">
+                                <thead><tr><th>Date</th><th>Opp</th><th>Value</th><th>Hit</th></tr></thead>
+                                <tbody>${htmlRows}</tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:8px; font-size:12px; color:#888;">
+                            Green = Hit the line &nbsp;•&nbsp; Red = Missed
                         </div>
                     </div>
                 `;
