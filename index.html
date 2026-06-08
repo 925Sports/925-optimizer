@@ -481,6 +481,7 @@
                 <option value="25X">25X</option>
             </select>
             <button onclick="clearAllBets()" style="margin-left:auto;padding:6px 14px;background:#ef4444;color:white;border:none;border-radius:9999px;font-size:12px;cursor:pointer;">Clear All Bets</button>
+            <button onclick="placeBetOnPrizePicks()" style="padding:6px 14px;background:#22c55e;color:white;border:none;border-radius:9999px;font-size:12px;cursor:pointer;font-weight:600;">Place Bet on PrizePicks</button>
         </div>
 
         <div class="betslips-container">
@@ -1239,9 +1240,12 @@
 
             updateBetSlipCount();
 
-            // Re-render current view
-            if (currentSport === 'all') renderAllView();
-            else renderContent();
+            // Re-render current view to update button states
+            if (currentSport === 'all') {
+                renderAllView();
+            } else {
+                renderContent();
+            }
 
             // If card passed, update its buttons
             if (cardElement) {
@@ -1848,6 +1852,34 @@
             updateBetSlipCount();
             document.getElementById('betslipsBody').innerHTML = `<tr><td colspan="7" style="padding:20px;color:#888;">All bets cleared.</td></tr>`;
             if (currentSport === 'all') renderAllView(); else renderContent();
+        }
+
+        function placeBetOnPrizePicks() {
+            if (selectedBets.length === 0) {
+                alert('No bets selected!');
+                return;
+            }
+
+            // Build a clean, readable bet slip
+            let betText = `PrizePicks Bet Slip (${selectedBets.length} legs):\n\n`;
+            
+            selectedBets.forEach((bet, i) => {
+                betText += `${i + 1}. ${bet.player} - ${bet.stat} ${bet.choice} ${bet.line}  |  Edge: ${bet.edge.toFixed(1)}%\n`;
+            });
+
+            betText += `\nCopy these legs into PrizePicks. Good luck!`;
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(betText).then(() => {
+                // Open PrizePicks
+                window.open('https://prizepicks.com/', '_blank');
+                
+                alert(`Bet slip copied to clipboard!\n\n${betText}\n\nPrizePicks has been opened in a new tab. Paste the legs there.`);
+            }).catch(() => {
+                // Fallback if clipboard fails
+                prompt('Copy this bet slip:', betText);
+                window.open('https://prizepicks.com/', '_blank');
+            });
         }
 
         function filterBetSlips() {
