@@ -1294,21 +1294,27 @@
             }
 
             const header = document.createElement('div');
-            header.style.cssText = 'padding:8px 24px 4px;color:#888;font-size:13px;';
+            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:8px 24px 4px; color:#888; font-size:13px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
+            // Create a centered wrapper for proper alignment (matching NBA/WNBA/MLB tabs)
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
+
             const grid = document.createElement('div');
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;padding:12px 24px 40px;width:100%;';
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;justify-content:center;';
             
             allRows.slice(0, 200).forEach((row, idx) => { // limit for perf
                 const card = createPlayerCard(row, idx, row._sport);
                 grid.appendChild(card);
             });
-            contentDiv.appendChild(grid);
+
+            wrapper.appendChild(grid);
+            contentDiv.appendChild(wrapper);
         }
 
         // ==================== PLAYER POPUP ====================
