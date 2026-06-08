@@ -1379,7 +1379,7 @@
                 // Chart
                 const chartDiv = document.createElement('div');
                 chartDiv.id = 'chartContainer';
-                chartDiv.innerHTML = '<canvas id="projectionChart" style="max-height:280px; height:280px;"></canvas>';
+                chartDiv.innerHTML = '<canvas id="projectionChart" style="max-height:320px; height:320px;"></canvas>';
                 content.appendChild(chartDiv);
 
                 const ctx = document.getElementById('projectionChart').getContext('2d');
@@ -1387,12 +1387,21 @@
                     { name: 'Avg Proj', value: parseFloat(row['Average Projected'] || row.Proj || 0) },
                     { name: 'DVP Adj', value: parseFloat(row['DVP Adjusted'] || row.DVP || 0) },
                     { name: 'Total Proj', value: parseFloat(row['Total Projection'] || row.Total || 0) },
+                    { name: 'True Avg Line', value: parseFloat(row['True Average Line'] || row['True Avg Line'] || 0) },
+                    { name: 'Line', value: parseFloat(row['Line Score'] || row.Line || 0) },
                     { name: 'UD Line', value: parseFloat(row['Underdog Line'] || 0) }
                 ].filter(p => p.value > 0);
 
                 const labels = projections.map(p => p.name);
                 const values = projections.map(p => p.value);
-                const colors = values.map(v => v > lineScore ? 'rgba(34,197,94,0.7)' : 'rgba(239,68,68,0.7)');
+
+                // Color logic: Green for projections, Gray for lines, Red/Pink for UD Line
+                const colors = projections.map(p => {
+                    const name = p.name.toLowerCase();
+                    if (name.includes('ud line')) return 'rgba(239, 68, 68, 0.85)';      // Red/Pink
+                    if (name.includes('line')) return 'rgba(156, 163, 175, 0.85)';       // Gray
+                    return p.value > lineScore ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)';
+                });
 
                 currentChart = new Chart(ctx, {
                     type: 'bar',
@@ -1400,8 +1409,25 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        scales: { y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } }, x: { grid: { color: '#333' }, ticks: { color: '#ccc' } } },
-                        plugins: { legend: { display: false }, annotation: { annotations: { line1: { type: 'line', yMin: lineScore, yMax: lineScore, borderColor: '#eab308', borderWidth: 2, borderDash: [4,3] } } } }
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 12 } } },
+                            x: { grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 12 } } }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            annotation: {
+                                annotations: {
+                                    line1: {
+                                        type: 'line',
+                                        yMin: lineScore,
+                                        yMax: lineScore,
+                                        borderColor: '#eab308',
+                                        borderWidth: 2,
+                                        borderDash: [4, 3]
+                                    }
+                                }
+                            }
+                        }
                     }
                 });
 
