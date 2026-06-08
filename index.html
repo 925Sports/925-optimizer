@@ -208,8 +208,18 @@
         }
         .button:hover { opacity: 1; background: #222; }
         .button.selected { opacity: 1; }
-        .button.selected.selected-more { background-color: #22c55e; color: #000; }
-        .button.selected.selected-less { background-color: #ef4444; color: #000; }
+        .button.selected.selected-more { 
+            background-color: #22c55e; 
+            color: #000; 
+            box-shadow: 0 0 0 2px #16a34a;
+            font-weight: 700;
+        }
+        .button.selected.selected-less { 
+            background-color: #ef4444; 
+            color: #000; 
+            box-shadow: 0 0 0 2px #b91c1c;
+            font-weight: 700;
+        }
         .divider { position: absolute; top: 5px; bottom: 5px; left: 50%; width: 2px; background: #333; transform: translateX(-50%); z-index: 1; }
         .divider.more { background: #22c55e; }
         .divider.less { background: #ef4444; }
@@ -1318,17 +1328,19 @@
                 </div>
             `;
 
-            // Add game context info (Game Total, O/U, Opp DVP Rank)
+            // Add game context info (Game Total, O/U, Point Spread, Opp DVP Rank)
             const gameTotal = row['Game Total'] || row['Total'] || '';
             const gameOU = row['Game O/U'] || row['O/U'] || row['Over/Under'] || '';
+            const pointSpread = row['Point Spread'] || row['Spread'] || '';
             const oppDvpRank = row['Opp DVP Rank'] || row['DVP Rank'] || row['Opponent DVP'] || '';
 
-            if (gameTotal || gameOU || oppDvpRank) {
+            if (gameTotal || gameOU || pointSpread || oppDvpRank) {
                 const gameInfo = document.createElement('div');
                 gameInfo.style.cssText = 'margin-top:8px; font-size:12px; color:#aaa; display:flex; gap:16px; flex-wrap:wrap;';
                 gameInfo.innerHTML = `
                     ${oppDvpRank ? `<span>Opp DVP Rank: <strong style="color:#fff;">${oppDvpRank}</strong></span>` : ''}
                     ${gameOU ? `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>` : ''}
+                    ${pointSpread ? `<span>Point Spread: <strong style="color:#fff;">${pointSpread}</strong></span>` : ''}
                     ${gameTotal ? `<span>Game Total: <strong style="color:#fff;">${gameTotal}</strong></span>` : ''}
                 `;
                 document.getElementById('popupName').appendChild(gameInfo);
