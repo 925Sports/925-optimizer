@@ -1257,8 +1257,8 @@
         // ==================== ALL VIEW ====================
         function renderAllView() {
             contentDiv.innerHTML = '';
-            contentDiv.className = ''; // full reset to avoid leftover styles from normal view
-            contentDiv.style.cssText = '';
+            contentDiv.className = '';
+            contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
             let allRows = [];
             ['nba', 'wnba', 'mlb'].forEach(s => {
@@ -1301,20 +1301,11 @@
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Create a centered wrapper for proper alignment (matching NBA/WNBA/MLB tabs)
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
-
-            const grid = document.createElement('div');
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;justify-content:center;';
-            
-            allRows.slice(0, 200).forEach((row, idx) => { // limit for perf
+            // Append cards directly (same as NBA/WNBA/MLB tabs) for consistent formatting
+            allRows.slice(0, 300).forEach((row, idx) => {
                 const card = createPlayerCard(row, idx, row._sport);
-                grid.appendChild(card);
+                contentDiv.appendChild(card);
             });
-
-            wrapper.appendChild(grid);
-            contentDiv.appendChild(wrapper);
         }
 
         // ==================== PLAYER POPUP ====================
