@@ -1533,7 +1533,7 @@
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
                     if (sport === 'mlb') {
-                        html += `<th>Date</th><th>Opp</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>FP</th>`;
+                        html += `<th>Date</th><th>Opp</th><th>IP</th><th>ER</th><th>H</th><th>K</th><th>BB</th><th>FP</th>`;
                     } else {
                         html += `<th>Date</th><th>Opp</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>FP</th>`;
                     }
@@ -1544,7 +1544,16 @@
                         let opp = log.opponent || log.Opp || '';
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
                         if (sport === 'mlb') {
-                            html += `<tr><td>${date}</td><td>${opp}</td><td>${log.atBats || log.AB || 0}</td><td>${log.hits || log.H || 0}</td><td>${log.runs || log.R || 0}</td><td>${log.rbi || log.RBI || 0}</td><td>${log.homeRuns || log.HR || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
+                            html += `<tr>
+                                <td>${date}</td>
+                                <td>${opp}</td>
+                                <td>${log.inningsPitched || log.IP || '-'}</td>
+                                <td>${log.earnedRuns || log.ER || 0}</td>
+                                <td>${log.hits || log.H || 0}</td>
+                                <td>${log.strikeOuts || log.K || 0}</td>
+                                <td>${log.baseOnBalls || log.BB || 0}</td>
+                                <td style="color:#00ffcc;font-weight:700">${fp}</td>
+                            </tr>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
                         }
@@ -1621,9 +1630,13 @@
                     content.innerHTML = `<p>No other props for this player today.</p>`;
                     return;
                 }
-                let h = `<h4>Other props for ${playerName}</h4><div class="table-wrapper"><table style="font-size:12px;"><thead><tr><th>Stat</th><th>Line</th><th>Edge</th><th>Bet</th></tr></thead><tbody>`;
+                let h = `<h4>Other props for ${playerName}</h4><div class="table-wrapper"><table style="font-size:12px;"><thead><tr><th>Stat</th><th>Line</th><th>Edge</th><th>Bet</th><th>Odds Type</th></tr></thead><tbody>`;
                 others.forEach(o => {
-                    h += `<tr style="cursor:pointer" onclick="document.getElementById('playerPopup').style.display='none';document.getElementById('overlay').style.display='none';showPlayerPopupFromList('${o['Player Name']}', '${o['Stat Type']}', '${sport}')"><td>${o['Stat Type']}</td><td>${o['Line Score']}</td><td>${parseFloat(o['Edge %']||0).toFixed(1)}%</td><td>${o['Bet Tag'] || ''}</td></tr>`;
+                    const oddsType = (o['Odds Type'] || 'standard').toLowerCase();
+                    let oddsDisplay = oddsType;
+                    if (oddsType === 'demon') oddsDisplay = 'Demon 👿';
+                    if (oddsType === 'goblin') oddsDisplay = 'Goblin 👺';
+                    h += `<tr style="cursor:pointer" onclick="document.getElementById('playerPopup').style.display='none';document.getElementById('overlay').style.display='none';showPlayerPopupFromList('${o['Player Name']}', '${o['Stat Type']}', '${sport}')"><td>${o['Stat Type']}</td><td>${o['Line Score']}</td><td>${parseFloat(o['Edge %']||0).toFixed(1)}%</td><td>${o['Bet Tag'] || ''}</td><td>${oddsDisplay}</td></tr>`;
                 });
                 h += `</tbody></table></div>`;
                 content.innerHTML = h;
