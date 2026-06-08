@@ -243,9 +243,9 @@
             border-radius: 50%;
             padding: 3px; /* creates the ring effect */
         }
-        .headshot-wrapper.nba { background: #a78bfa; }   /* lighter purple */
-        .headshot-wrapper.wnba { background: #fb923c; }  /* lighter orange */
-        .headshot-wrapper.mlb { background: #4ade80; }   /* lighter green */
+        .headshot-wrapper.nba { background: rgba(124, 58, 237, 0.35); }   /* darker/more transparent purple */
+        .headshot-wrapper.wnba { background: rgba(249, 115, 22, 0.35); }  /* darker/more transparent orange */
+        .headshot-wrapper.mlb { background: rgba(34, 197, 94, 0.35); }   /* darker/more transparent green */
 
         .headshot-wrapper .headshot {
             width: 100%;
@@ -1294,7 +1294,7 @@
             }
 
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:8px 24px 4px; color:#888; font-size:13px;';
+            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
