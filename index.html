@@ -1317,6 +1317,22 @@
                     ${statType} &nbsp;•&nbsp; Line: <strong>${lineVal}</strong> &nbsp;•&nbsp; Edge: <strong style="color:#00ffcc">${edgeVal}%</strong>
                 </div>
             `;
+
+            // Add game context info (Game Total, O/U, Opp DVP Rank)
+            const gameTotal = row['Game Total'] || row['Total'] || '';
+            const gameOU = row['Game O/U'] || row['O/U'] || row['Over/Under'] || '';
+            const oppDvpRank = row['Opp DVP Rank'] || row['DVP Rank'] || row['Opponent DVP'] || '';
+
+            if (gameTotal || gameOU || oppDvpRank) {
+                const gameInfo = document.createElement('div');
+                gameInfo.style.cssText = 'margin-top:8px; font-size:12px; color:#aaa; display:flex; gap:16px; flex-wrap:wrap;';
+                gameInfo.innerHTML = `
+                    ${oppDvpRank ? `<span>Opp DVP Rank: <strong style="color:#fff;">${oppDvpRank}</strong></span>` : ''}
+                    ${gameOU ? `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>` : ''}
+                    ${gameTotal ? `<span>Game Total: <strong style="color:#fff;">${gameTotal}</strong></span>` : ''}
+                `;
+                document.getElementById('popupName').appendChild(gameInfo);
+            }
             document.getElementById('popupHeadshot').src = row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/64?text=?';
             document.getElementById('popupTeamPos').innerHTML = `${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}`;
             document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
