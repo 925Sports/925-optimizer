@@ -896,7 +896,9 @@
 
             // Odds type select (sync with toggle)
             oddsSelect.onchange = () => {
-                if (currentSport !== 'all') {
+                if (currentSport === 'all') {
+                    renderAllView();
+                } else {
                     dataStore[currentSport].currentOddsType = oddsSelect.value;
                     // sync toggle buttons
                     document.querySelectorAll('#oddsToggle button').forEach(b => b.classList.remove('active'));
@@ -1265,6 +1267,15 @@
                 });
             });
 
+            // Filter by selected Odds Type (Standard / Demon / Goblin)
+            const selectedOddsType = (document.getElementById('oddsSelect')?.value || 'standard').toLowerCase();
+            if (selectedOddsType !== 'all') {
+                allRows = allRows.filter(r => {
+                    const oddsType = (r['Odds Type'] || 'standard').toLowerCase();
+                    return oddsType === selectedOddsType;
+                });
+            }
+
             // Simple global search
             const term = (searchInput.value || '').toLowerCase().trim();
             if (term) {
@@ -1284,7 +1295,10 @@
 
             const header = document.createElement('div');
             header.style.cssText = 'padding:8px 24px 4px;color:#888;font-size:13px;';
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+            const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
+                             (selectedOddsType === 'demon' ? 'Demon' : 
+                             (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
+            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
             const grid = document.createElement('div');
