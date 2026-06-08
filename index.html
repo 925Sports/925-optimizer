@@ -372,7 +372,6 @@
 
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select id="oddsSelect" style="padding:8px 12px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;font-size:13px;">
-                <option value="all">All Odds</option>
                 <option value="standard" selected>Standard</option>
                 <option value="demon">Demon 👿</option>
                 <option value="goblin">Goblin 👺</option>
@@ -384,8 +383,7 @@
             </select>
 
             <div class="toggle" id="oddsToggle">
-                <button class="toggle-btn active" data-type="all">All</button>
-                <button class="toggle-btn" data-type="standard">Standard</button>
+                <button class="toggle-btn active" data-type="standard">Standard</button>
                 <button class="toggle-btn" data-type="demon">Demon</button>
                 <button class="toggle-btn" data-type="goblin">Goblin</button>
             </div>
@@ -681,6 +679,11 @@
                 if (nbaRes.status === 'fulfilled') dataStore.nba.allData = Papa.parse(nbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (wnbaRes.status === 'fulfilled') dataStore.wnba.allData = Papa.parse(wnbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (mlbRes.status === 'fulfilled') dataStore.mlb.allData = Papa.parse(mlbRes.value, { header: true, skipEmptyLines: true }).data;
+
+                // Ensure odds type defaults to Standard on load
+                ['nba', 'wnba', 'mlb'].forEach(s => {
+                    if (!dataStore[s].currentOddsType) dataStore[s].currentOddsType = 'standard';
+                });
 
                 // Prepare each sport
                 ['nba', 'wnba', 'mlb'].forEach(sport => prepareSportData(sport));
