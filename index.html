@@ -570,14 +570,17 @@
             if (n1 === n2) return true;
             if (n1.includes(n2) || n2.includes(n1)) return true;
 
-            // Extra fuzzy: last name match if first names are close
-            const parts1 = logName.toLowerCase().split(/\s+/);
-            const parts2 = playerName.toLowerCase().split(/\s+/);
-            if (parts1.length > 1 && parts2.length > 1) {
+            // Strict matching for MLB (especially pitchers): last name + first initial
+            const parts1 = logName.toLowerCase().split(/\s+/).filter(Boolean);
+            const parts2 = playerName.toLowerCase().split(/\s+/).filter(Boolean);
+
+            if (parts1.length >= 2 && parts2.length >= 2) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                // Only allow last-name match if both names have at least a first + last
-                if (last1 && last2 && last1 === last2 && last1.length > 3) {
+                const firstInitial1 = parts1[0][0];
+                const firstInitial2 = parts2[0][0];
+
+                if (last1 && last2 && last1 === last2 && last1.length > 3 && firstInitial1 === firstInitial2) {
                     return true;
                 }
             }
@@ -1348,9 +1351,9 @@
                 return;
             }
 
-            // Subtle, non-distracting summary text placed above cards but below stat type tabs
+            // Clean, non-distracting summary text - placed directly above the player cards
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:2px auto 10px; padding:2px 24px; color:#666; font-size:11.5px; opacity:0.75;';
+            header.style.cssText = 'max-width:1400px; margin:6px auto 8px; padding:0 24px; color:#666; font-size:11.5px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
@@ -1366,6 +1369,28 @@
                 grid.appendChild(card);
             });
             contentDiv.appendChild(grid);
+
+            // Re-attach critical global button handlers (fixes All tab buttons not working until switching sports)
+            setTimeout(() => {
+                const btns = {
+                    'filterBtn': () => showFilterPopup ? showFilterPopup() : null,
+                    'calloutFilterBtn': () => showCalloutFilterPopup ? showCalloutFilterPopup() : null,
+                    'advancedFilterBtn': () => showAdvancedFilterPopup ? showAdvancedFilterPopup() : null,
+                    'betslipBtn': () => showBetSlipPopup(),
+                    'clearBetsBtn': () => {
+                        if (selectedBets.length > 0 && confirm(`Clear all ${selectedBets.length} selected bets?`)) {
+                            selectedBets = [];
+                            renderAllView();
+                            const hc = document.getElementById('betSlipCountHeader');
+                            if (hc) hc.textContent = '(0)';
+                        }
+                    }
+                };
+                Object.keys(btns).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && btns[id]) el.onclick = btns[id];
+                });
+            }, 50);
         }
 
         // ==================== PLAYER POPUP ====================
@@ -1374,13 +1399,31 @@
             currentPopupSport = sport;
             currentRowIndex = index;
 
-            // Load game logs on demand (this is the key speed improvement)
-            await ensureGameLogsLoaded(sport);
-
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
+
+            // Show popup immediately with loading state
             popup.style.display = 'block';
             overlay.style.display = 'block';
+
+            // Simple loading message while game logs load (especially important for MLB)
+            popup.innerHTML = `
+                <div style="padding:50px 20px; text-align:center; color:#888; min-height:300px;">
+                    <div style="margin-bottom:16px; font-size:15px;">Loading player details & game logs...</div>
+                    <div style="width:140px; height:3px; background:#222; margin:0 auto; border-radius:3px; overflow:hidden;">
+                        <div style="height:100%; width:35%; background:#00ffcc; animation: loading-bar 1.2s infinite;"></div>
+                    </div>
+                </div>
+            `;
+
+            // Load game logs on demand (this can take time on first load for MLB)
+            await ensureGameLogsLoaded(sport);
+
+            // Clear loading state and continue with normal popup rendering
+            popup.innerHTML = '';
+
+            const popupEl = document.getElementById('playerPopup');
+            const overlayEl = document.getElementById('overlay');
 
             // Header
             const betTag = (row['Bet Tag'] || '').trim();
@@ -1453,8 +1496,8 @@
             document.getElementById('prevPlayer').onclick = () => navigatePopup(-1);
             document.getElementById('nextPlayer').onclick = () => navigatePopup(1);
             document.getElementById('closePlayerPopup').onclick = () => {
-                popup.style.display = 'none';
-                overlay.style.display = 'none';
+                popupEl.style.display = 'none';
+                overlayEl.style.display = 'none';
                 if (currentChart) { currentChart.destroy(); currentChart = null; }
             };
         }
@@ -1583,7 +1626,18 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+
+                // Extra strict filter for MLB pitchers (prevents pulling whole staff)
+                if (sport === 'mlb' && !isHitter) {
+                    logs = logs.filter(log => {
+                        const ip = parseFloat(log.inningsPitched || log.IP || log['IP'] || 0);
+                        // Require at least 1.0 IP for pitchers (filters out most relief/mop-up appearances)
+                        // and re-verify name match
+                        return ip >= 1.0 && nameMatches(log.fullName || log['fullName'] || log['Player Name'] || '', playerName);
+                    });
+                }
+
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
@@ -1616,9 +1670,9 @@
                             const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || 
                                              ((log.primaryPosition_name || '').toLowerCase().includes('pitch') === false && parseFloat(log.inningsPitched || log.IP || 0) === 0);
 
-                            // Skip pitcher games that have no IP (blank or "-")
+                            // Strict filter for pitchers: only include games where they actually pitched (IP > 0)
                             const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
-                            if (!isHitter && ipVal === 0) return;
+                            if (!isHitter && ipVal <= 0) return;
 
                             let col1 = isHitter 
                                 ? (log.atBats || log.AB || '-') 
