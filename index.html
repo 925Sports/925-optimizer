@@ -1338,13 +1338,13 @@
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
 
-            // Clean header (matches individual sport tabs)
+            // Clean single header (placed after stat type tabs, before cards)
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto 12px; padding:0 24px; color:#666; font-size:12px;';
+            header.style.cssText = 'max-width:1400px; margin:4px auto 10px; padding:0 24px; color:#666; font-size:11.5px;';
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Clean grid - identical layout to MLB / NBA / WNBA tabs
+            // Clean grid - matches MLB tab layout exactly
             const grid = document.createElement('div');
             grid.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; max-width:1400px; margin:0 auto; padding:0 16px;';
             
@@ -1580,33 +1580,12 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const propPlayerId = String(row.playerId || row['player_id'] || row['Player ID'] || row['Data ID'] || row.id || '').trim();
-                const playerTeam = (row.Team || row.team || '').toUpperCase();
-
                 let logs = (dataStore[sport].gameLogs || []).filter(l => {
                     const logName = l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '';
-                    const logPlayerId = String(l.playerId || l['playerId'] || l['player_id'] || '').trim();
-
-                    // Priority 1: Exact playerId match (best if available in both datasets)
-                    if (propPlayerId && logPlayerId && propPlayerId === logPlayerId) {
-                        return true;
-                    }
-
-                    // Priority 2: Strict name match
-                    if (!nameMatches(logName, playerName)) return false;
-
-                    // For MLB, also verify the player's team was in this game (prevents pulling other team's players)
-                    if (sport === 'mlb' && playerTeam) {
-                        const home = (l.home_team_abbreviation || l['home_team_abbreviation'] || '').toUpperCase();
-                        const away = (l.away_team_abbreviation || l['away_team_abbreviation'] || '').toUpperCase();
-                        if (home && away && home !== playerTeam && away !== playerTeam) {
-                            return false;
-                        }
-                    }
-                    return true;
+                    return nameMatches(logName, playerName);
                 });
 
-                // Final participation filter (MLB)
+                // Participation filter for MLB (prevents empty or team-wide logs)
                 if (sport === 'mlb') {
                     logs = logs.filter(log => {
                         if (isHitter) {
