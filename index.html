@@ -468,7 +468,7 @@
     <div id="betslipPopup" class="popup">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <h3 style="margin:0;">Generated Bet Slips <span id="betSlipCount" style="color:#888;font-size:14px;"></span></h3>
-            <button id="closeBetSlip" style="margin:0;">Close</button>
+            <button id="closeBetSlip" style="margin:0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
         </div>
         
         <div class="payout-filter-container" style="margin:12px 0 8px;display:flex;align-items:center;gap:8px;">
@@ -643,16 +643,41 @@
         }
 
         function calculateFantasyScore(log, sport) {
-            if (sport === 'mlb') {
-                return parseFloat(log.fantasyPoints || log.FP || 0);
+            if (sport !== 'mlb') {
+                const pts = parseFloat(log.PTS || log.points || 0);
+                const reb = parseFloat(log.REB || log.rebounds || 0);
+                const ast = parseFloat(log.AST || log.assists || 0);
+                const stl = parseFloat(log.STL || 0);
+                const blk = parseFloat(log.BLK || 0);
+                const tov = parseFloat(log.TOV || 0);
+                return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov;
             }
-            const pts = parseFloat(log.PTS || log.points || 0);
-            const reb = parseFloat(log.REB || log.rebounds || 0);
-            const ast = parseFloat(log.AST || log.assists || 0);
-            const stl = parseFloat(log.STL || 0);
-            const blk = parseFloat(log.BLK || 0);
-            const tov = parseFloat(log.TOV || 0);
-            return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov;
+
+            // MLB Fantasy Score calculation (from original MLB code)
+            const isHitter = parseFloat(log.atBats || log.AB || 0) > 0;
+
+            if (isHitter) {
+                const singles = parseFloat(log.hits || log.H || 0) - parseFloat(log.doubles || 0) - parseFloat(log.triples || 0) - parseFloat(log.homeRuns || log.HR || 0);
+                const doubles = parseFloat(log.doubles || 0);
+                const triples = parseFloat(log.triples || 0);
+                const hr = parseFloat(log.homeRuns || log.HR || 0);
+                const runs = parseFloat(log.runs || log.R || 0);
+                const rbi = parseFloat(log.rbi || log.RBI || 0);
+                const bb = parseFloat(log.baseOnBalls || log.BB || 0);
+                const hbp = parseFloat(log.hitByPitch || log.HBP || 0);
+                const sb = parseFloat(log.stolenBases || log.SB || 0);
+                return (singles * 3) + (doubles * 5) + (triples * 8) + (hr * 10) + (runs * 2) + (rbi * 2) + (bb * 2) + (hbp * 2) + (sb * 5);
+            } else {
+                // Pitcher
+                const ip = parseFloat(log.inningsPitched || log.IP || 0);
+                const outs = ip * 3;
+                const er = parseFloat(log.earnedRuns || log.ER || 0);
+                const k = parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                const decision = (log.decision || log.Decision || log.note || '').toUpperCase();
+                const win = decision.includes('W') ? 6 : 0;
+                const qs = (ip >= 6 && er < 3) ? 4 : 0;
+                return win + qs + outs + (k * 3) - (er * 3);
+            }
         }
 
         // ==================== DATA LOADING & PREP ====================
@@ -1547,7 +1572,14 @@
 
                     logs.slice(0, 30).forEach(log => {
                         const date = log.gameDate || log['GAME DATE'] || log.date || log['Date'] || '';
-                        let opp = log.opponent || log.Opp || log['Opp'] || log['Opponent'] || '';
+                        // Improved Opp detection for MLB game logs
+                let opp = log.opponent || log.Opp || log['Opp'] || log['Opponent'] || '';
+                if (!opp && (log.home_team_abbreviation || log.away_team_abbreviation)) {
+                    const home = log.home_team_abbreviation || '';
+                    const away = log.away_team_abbreviation || '';
+                    // Try to determine which team is the opponent
+                    opp = (home && home !== (row.Team || '')) ? home : away;
+                }
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
 
                         if (sport === 'mlb') {
@@ -1926,6 +1958,9 @@
                 th.textContent = col;
                 headerRow.appendChild(th);
             });
+
+            // Sort by Edge % descending (highest edge first)
+            outputData.sort((a, b) => (b.edge || 0) - (a.edge || 0));
 
             outputData.forEach((combo) => {
                 const tr = document.createElement('tr');
