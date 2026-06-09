@@ -1323,36 +1323,44 @@
                 document.getElementById('popupName').appendChild(gameInfo);
             }
 
-            // Also populate dedicated popupSpreadOU for MLB (matches MLB code style)
-            const popupSpreadOUEl = document.getElementById('popupSpreadOU');
-            if (sport === 'mlb' && (gameOU || pointSpread)) {
-                const ou = parseFloat(gameOU || 0);
-                let ouColorClass = ou >= 9.6 ? 'ou-green' : (ou <= 8.4 ? 'ou-red' : 'ou-yellow');
-                let ouText = ou >= 9.6 ? 'High' : (ou <= 8.4 ? 'Low' : 'Normal');
-                const spread = parseFloat(pointSpread || 0);
-                let spreadColorClass = spread < 0 ? 'spread-green' : (Math.abs(spread) <= 0.9 ? 'spread-yellow' : 'spread-red');
-                popupSpreadOUEl.innerHTML = `
-                    <span class="${spreadColorClass}">Spread: ${spread}</span> &nbsp;•&nbsp; 
-                    <span class="${ouColorClass}">O/U: ${ou} (${ouText})</span>
-                `;
-                popupSpreadOUEl.style.display = 'block';
-            } else {
-                popupSpreadOUEl.innerHTML = '';
-                popupSpreadOUEl.style.display = 'none';
-            }
-
             document.getElementById('popupHeadshot').src = row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/64?text=?';
             document.getElementById('popupTeamPos').innerHTML = `${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}`;
             document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
             document.getElementById('popupScheduledAt').innerHTML = row['Scheduled At'] ? new Date(row['Scheduled At']).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '';
 
-            // Stats boxes
+            // Compute L5 Avg and L5 Hit Rate on the fly (pulling logic from Splits tab)
+            let l5Avg = '-';
+            let l5HitPct = '-';
+            const logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+            if (logsForL5.length > 0) {
+                const sortedLogs = [...logsForL5].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                const last5 = sortedLogs.slice(0, 5);
+                if (last5.length > 0) {
+                    const lineValNum = parseFloat(row['Line Score'] || row.Line || 0);
+                    const isMoreBet = (row['Bet Tag'] || '').toLowerCase().includes('more') || (row['Bet Tag'] || '').toLowerCase().includes('over');
+                    let sum = 0;
+                    let hits = 0;
+                    last5.forEach(log => {
+                        const val = getStatValue(log, row['Stat Type'] || '', sport);
+                        sum += val;
+                        if (isMoreBet) {
+                            if (val > lineValNum) hits++;
+                        } else {
+                            if (val < lineValNum) hits++;
+                        }
+                    });
+                    l5Avg = (sum / last5.length).toFixed(1);
+                    l5HitPct = ((hits / last5.length) * 100).toFixed(0);
+                }
+            }
+
+            // Stats boxes (now with real L5 data)
             const statsBoxes = document.getElementById('statsBoxes');
             statsBoxes.innerHTML = `
                 <div class="stat-box"><div class="stat-label">Edge</div><div class="stat-value" style="color:#00ffcc">${parseFloat(row['Edge %'] || 0).toFixed(1)}%</div></div>
                 <div class="stat-box"><div class="stat-label">Line</div><div class="stat-value">${row['Line Score'] || row.Line || '-'}</div></div>
-                <div class="stat-box"><div class="stat-label">L5 Avg</div><div class="stat-value">${row._l5Avg || '-'}</div></div>
-                <div class="stat-box"><div class="stat-label">L5 Hit</div><div class="stat-value">${row._l5HitRate ? row._l5HitRate + '%' : '-'}</div></div>
+                <div class="stat-box"><div class="stat-label">L5 Avg</div><div class="stat-value">${l5Avg}</div></div>
+                <div class="stat-box"><div class="stat-label">L5 Hit</div><div class="stat-value">${l5HitPct ? l5HitPct + '%' : '-'}</div></div>
             `;
 
             // Tabs
@@ -1434,8 +1442,10 @@
 
                 const colors = projections.map(p => {
                     const name = p.name.toLowerCase();
-                    if (name.includes('ud line')) return 'rgba(239, 68, 68, 0.85)';
-                    if (name.includes('line')) return 'rgba(156, 163, 175, 0.85)';
+                    // UD Line should follow the same green/red rule as other projections (no special red)
+                    if (name.includes('line')) {
+                        return 'rgba(156, 163, 175, 0.85)';
+                    }
                     return p.value > lineScore ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)';
                 });
 
