@@ -1348,13 +1348,13 @@
                 return;
             }
 
-            // Clean summary text placed clearly above the player cards (not to the left)
+            // Clean, non-distracting summary text - placed directly above the player cards
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto 10px; padding:6px 24px; color:#888; font-size:12px; border-bottom:1px solid #222;';
+            header.style.cssText = 'max-width:1400px; margin:6px auto 8px; padding:0 24px; color:#666; font-size:11.5px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#666">Click any card for details • Bets added to shared slip</span>`;
+            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
             // Append cards in a grid container for consistent formatting with other tabs
@@ -1399,17 +1399,16 @@
             // Show quick loading indicator
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
-            popup.style.display = 'block';
-            overlay.style.display = 'block';
-            popup.innerHTML = `<div style="padding:40px;text-align:center;color:#00ffcc;">Loading player details...</div>`;
+            popupEl.style.display = 'block';
+            overlayEl.style.display = 'block';
+            popupEl.innerHTML = `<div style="padding:40px;text-align:center;color:#00ffcc;">Loading player details...</div>`;
 
             // Load game logs on demand
             await ensureGameLogsLoaded(sport);
 
-            const popup = document.getElementById('playerPopup');
-            const overlay = document.getElementById('overlay');
-            popup.style.display = 'block';
-            overlay.style.display = 'block';
+            // Re-select elements after async game log load
+            const popupEl = document.getElementById('playerPopup');
+            const overlayEl = document.getElementById('overlay');
 
             // Header
             const betTag = (row['Bet Tag'] || '').trim();
@@ -1482,8 +1481,8 @@
             document.getElementById('prevPlayer').onclick = () => navigatePopup(-1);
             document.getElementById('nextPlayer').onclick = () => navigatePopup(1);
             document.getElementById('closePlayerPopup').onclick = () => {
-                popup.style.display = 'none';
-                overlay.style.display = 'none';
+                popupEl.style.display = 'none';
+                overlayEl.style.display = 'none';
                 if (currentChart) { currentChart.destroy(); currentChart = null; }
             };
         }
