@@ -1219,13 +1219,14 @@
                 sport,
                 player: row['Player Name'],
                 choice,
-                line: row['Line Score'] || row.Line,
+                line: row['Line Score'] || row.Line || row['Line'],
                 stat: row['Stat Type'],
                 edge: parseFloat(row['Edge %'] || 0),
                 prob: parseFloat(row['Edge %'] || 50) / 100,
                 game: row['Game Short Title'] || row.Game || '',
                 team: row.Team || '',
-                id: row.id || Date.now()
+                id: row.id || Date.now(),
+                projectionId: row['Data ID'] || row['projectionId'] || ''
             };
 
             if (existingIndex > -1 && selectedBets[existingIndex].choice === choice) {
@@ -1537,7 +1538,8 @@
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
                     if (sport === 'mlb') {
-                        html += `<th>Date</th><th>Opp</th><th>IP</th><th>ER</th><th>H</th><th>K</th><th>BB</th><th>FP</th>`;
+                        // Rich MLB columns matching original tool
+                        html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR/K</th><th>BB</th><th>FP</th><th>Summary</th>`;
                     } else {
                         html += `<th>Date</th><th>Opp</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>FP</th>`;
                     }
@@ -1549,16 +1551,36 @@
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
 
                         if (sport === 'mlb') {
-                            // More robust MLB Game Log row
+                            const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || (log.primaryPosition_name || '').toLowerCase().includes('pitch') === false;
+
+                            let col1 = isHitter 
+                                ? (log.atBats || log.AB || '-') 
+                                : (log.inningsPitched || log.IP || log['IP'] || '-');
+
+                            let col2 = isHitter 
+                                ? (log.hits || log.H || 0) 
+                                : (log.earnedRuns || log.ER || 0);
+
+                            let col3 = isHitter ? (log.runs || log.R || 0) : '-';
+                            let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
+                            let col5 = isHitter 
+                                ? (log.homeRuns || log.HR || 0) 
+                                : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+
+                            let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
+                            let summary = log.gameLogSummary || log.Summary || log.note || '';
+
                             html += `<tr>
                                 <td>${date}</td>
                                 <td>${opp}</td>
-                                <td>${log.inningsPitched || log.IP || log['IP'] || '-'}</td>
-                                <td>${log.earnedRuns || log.ER || log['ER'] || 0}</td>
-                                <td>${log.hits || log.H || log['H'] || 0}</td>
-                                <td>${log.strikeOuts || log.K || log['K'] || 0}</td>
-                                <td>${log.baseOnBalls || log.BB || log['BB'] || 0}</td>
+                                <td>${col1}</td>
+                                <td>${col2}</td>
+                                <td>${col3}</td>
+                                <td>${col4}</td>
+                                <td>${col5}</td>
+                                <td>${bb}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
+                                <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
                             </tr>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
@@ -1802,6 +1824,68 @@
             renderBetSlipsTable();
         }
 
+        // ==================== BET SLIP COMBINATION GENERATOR (from original MLB/NBA code) ====================
+        const predefinedCombinations = {
+            2: [[1,2],[1,3],[1,4],[1,5],[1,6],[1,7],[1,8],[1,9],[1,10],[2,3],[2,4],[2,5],[2,6],[2,7],[2,8],[2,9],[2,10],[3,4],[3,5],[3,6],[3,7],[3,8],[3,9],[3,10],[4,5],[4,6],[4,7],[4,8],[4,9],[4,10],[5,6],[5,7],[5,8],[5,9],[5,10],[6,7],[6,8],[6,9],[6,10],[7,8],[7,9],[7,10],[8,9],[8,10],[9,10]],
+            3: [[1,2,3],[1,2,4],[1,2,5],[1,2,6],[1,2,7],[1,2,8],[1,3,4],[1,3,5],[1,3,6],[1,3,7],[1,4,5],[1,4,6],[1,4,7],[1,5,6],[1,5,7],[1,6,7],[1,7,8],[1,8,9],[1,9,10],[2,3,4],[2,3,5],[2,3,6],[2,3,7],[2,3,8],[2,4,5],[2,4,6],[2,4,7],[2,5,6],[2,5,7],[2,6,7],[2,7,8],[2,8,9],[2,9,10],[3,4,5],[3,4,6],[3,4,7],[3,4,8],[3,5,6],[3,5,7],[3,6,7],[3,7,8],[3,8,9],[3,9,10],[4,5,6],[4,5,7],[4,5,8],[4,6,7],[4,6,8],[4,7,8],[4,8,9],[4,9,10],[5,6,7,8],[5,6,8,9],[5,7,8,9],[5,8,9,10],[6,7,8,9],[6,8,9,10],[7,8,9,10]],
+            4: [[1,2,3,4],[1,2,3,5],[1,2,3,6],[1,2,3,7],[1,2,4,5],[1,2,4,6],[1,2,4,7],[1,2,5,6],[1,2,5,7],[1,2,6,7],[1,3,4,5],[1,3,4,6],[1,3,4,7],[1,3,5,6],[1,3,5,7],[1,3,6,7],[1,4,5,6],[1,4,5,7],[1,4,6,7],[1,5,6,7],[1,6,7,8],[1,7,8,9],[1,8,9,10],[2,3,4,5],[2,3,4,6],[2,3,4,7],[2,3,5,6],[2,3,5,7],[2,3,6,7],[2,4,5,6],[2,4,5,7],[2,4,6,7],[2,5,6,7],[2,6,7,8],[2,7,8,9],[2,8,9,10],[3,4,5,6],[3,4,5,7],[3,4,5,8],[3,4,6,7],[3,4,6,8],[3,4,7,8],[3,5,6,7],[3,5,6,8],[3,5,7,8],[3,6,7,8],[3,7,8,9],[3,8,9,10],[4,5,6,7],[4,5,6,8],[4,5,7,8],[4,5,8,9],[4,6,7,8],[4,6,8,9],[4,7,8,9],[4,8,9,10],[5,6,7,8],[5,6,8,9],[5,7,8,9],[5,8,9,10],[6,7,8,9],[6,8,9,10],[7,8,9,10]],
+            5: [[1,2,3,4,5],[1,2,3,4,6],[1,2,3,4,7],[1,2,3,5,6],[1,2,3,5,7],[1,2,3,6,7],[1,2,4,5,6],[1,2,4,5,7],[1,2,4,6,7],[1,2,5,6,7],[1,3,4,5,6],[1,3,4,5,7],[1,3,4,6,7],[1,3,5,6,7],[1,4,5,6,7],[1,5,6,7,8],[1,6,7,8,9],[1,7,8,9,10],[2,3,4,5,6],[2,3,4,5,7],[2,3,4,6,7],[2,3,5,6,7],[2,3,6,7,8],[2,4,5,6,7],[2,4,6,7,8],[2,5,6,7,8],[2,6,7,8,9],[2,7,8,9,10],[3,4,5,6,7],[3,4,5,6,8],[3,4,5,7,8],[3,4,6,7,8],[3,5,6,7,8],[3,6,7,8,9],[3,7,8,9,10],[4,5,6,7,8],[4,5,6,7,9],[4,5,7,8,9],[4,6,7,8,9],[4,7,8,9,10],[5,6,7,8,9],[5,6,7,8,10],[5,6,8,9,10],[5,7,8,9,10],[6,7,8,9,10]],
+            6: [[1,2,3,4,5,6],[1,2,3,4,5,7],[1,2,3,4,6,7],[1,2,3,5,6,7],[1,2,4,5,6,7],[1,3,4,5,6,7],[1,4,5,6,7,8],[1,5,6,7,8,9],[1,6,7,8,9,10],[2,3,4,5,6,7],[2,3,4,5,6,8],[2,3,4,5,7,8],[2,3,4,6,7,8],[2,3,5,6,7,8],[2,4,5,6,7,8],[2,5,6,7,8,9],[2,6,7,8,9,10],[3,4,5,6,7,8],[3,4,5,6,7,9],[3,4,5,6,8,9],[3,4,6,7,8,9],[3,5,6,7,8,9],[3,6,7,8,9,10],[4,5,6,7,8,9],[4,5,6,7,8,10],[4,5,6,7,9,10],[4,5,7,8,9,10],[5,6,7,8,9,10]]
+        };
+
+        function generateCombinations(bets) {
+            let allCombinations = { 2: [], 3: [], 4: [], 5: [], 6: [] };
+            const betCount = bets.length;
+            if (betCount < 2) return allCombinations;
+
+            for (let pickcount = 2; pickcount <= Math.min(6, betCount); pickcount++) {
+                const combos = (predefinedCombinations[pickcount] || []).filter(combo => combo.every(id => id <= betCount)).map(combo => combo.map(id => id - 1));
+                combos.forEach(combo => {
+                    let valid = true;
+                    let players = new Set();
+                    let productProb = 1;
+                    let comboPlayers = [];
+                    let playerdetails = [];
+                    let projectionEntries = [];
+                    let games = new Set();
+                    for (let idx of combo) {
+                        const bet = bets[idx];
+                        if (!bet) { valid = false; break; }
+                        const player = bet.player || 'Unknown';
+                        const prob = parseFloat(bet.prob) || 0.5;
+                        const direction = (bet.choice || 'More').toLowerCase() === 'more' ? 'o' : 'u';
+                        const line = bet.line || '0';
+                        if (prob <= 0 || prob >= 1) { valid = false; break; }
+                        if (players.has(player)) { valid = false; break; }
+                        players.add(player);
+                        productProb *= prob;
+                        comboPlayers.push(player);
+                        playerdetails.push(bet);
+                        projectionEntries.push(`${bet.id || ''},${bet.projectionId || ''}-${direction}-${line}`);
+                        games.add(bet.game || 'Mixed');
+                    }
+                    if (valid) {
+                        let cashLikelihood = productProb * 100;
+                        let breakEven = pickcount === 2 ? 0.33 : pickcount === 3 ? 0.1667 : pickcount === 4 ? 0.10 : pickcount === 5 ? 0.10 : 0.04;
+                        let edge = (productProb - breakEven) * 100;
+                        let payout = pickcount === 2 ? '3X' : pickcount === 3 ? '6X' : pickcount === 4 ? '10X' : pickcount === 5 ? '10X' : '25X';
+                        let gameLabel = games.size === 1 ? Array.from(games)[0] : 'Mixed';
+                        allCombinations[pickcount].push({
+                            sliplink: `https://prizepicks.onelink.me/gCQS/shareEntry?projections=${projectionEntries.join(',')}`,
+                            players: comboPlayers.join(' | '),
+                            playerdetails,
+                            edge: edge,
+                            payout,
+                            pickcount,
+                            cashlikelihood: cashLikelihood,
+                            game: gameLabel
+                        });
+                    }
+                });
+            }
+            return allCombinations;
+        }
+
         function renderBetSlipsTable() {
             const tbody = document.getElementById('betslipsBody');
             const headerRow = document.getElementById('betslipsHeader');
@@ -1813,35 +1897,78 @@
                 return;
             }
 
-            // Performance guard - don't try to generate combinations if too many bets
-            if (selectedBets.length > 12) {
-                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Too many bets selected for combination generation. Please reduce to 10 or fewer for best performance.</td></tr>`;
+            if (selectedBets.length < 2) {
+                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Select at least 2 bets to generate combinations.</td></tr>`;
                 return;
             }
 
-            // Headers
-            const headers = ['Sport', 'Player', 'Stat', 'Choice', 'Line', 'Edge', 'Remove'];
-            headers.forEach(h => {
+            if (selectedBets.length > 12) {
+                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Too many bets selected. Please reduce to 10 or fewer for best performance.</td></tr>`;
+                return;
+            }
+
+            // Use combination generator (from original MLB/NBA code)
+            const combinations = generateCombinations(selectedBets);
+            let outputData = [];
+            for (let pickcount = 2; pickcount <= 6; pickcount++) {
+                outputData.push(...(combinations[pickcount] || []));
+            }
+
+            if (outputData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="padding:20px;color:#ffcc00;">Could not generate valid combinations. Make sure you have at least 2 valid bets with good probability data.</td></tr>`;
+                return;
+            }
+
+            // Headers for combinations
+            const headers = ['Slip Link', 'Players', 'Edge', 'Cash Likelihood', 'Payout'];
+            headers.forEach(col => {
                 const th = document.createElement('th');
-                th.textContent = h;
+                th.textContent = col;
                 headerRow.appendChild(th);
             });
 
-            selectedBets.forEach((bet, idx) => {
+            outputData.forEach((combo) => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><span class="sport-badge ${bet.sport}" style="position:static;display:inline-block;font-size:9px;padding:0 5px;">${bet.sport.toUpperCase()}</span></td>
-                    <td><strong>${bet.player}</strong></td>
-                    <td>${bet.stat}</td>
-                    <td style="color:${bet.choice === 'More' ? '#22c55e' : '#ef4444'};font-weight:700;">${bet.choice}</td>
-                    <td>${bet.line}</td>
-                    <td style="color:#00ffcc;font-weight:700;">${bet.edge.toFixed(1)}%</td>
-                    <td><button style="background:#ef4444;color:white;border:none;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;" onclick="removeBet(${idx})">×</button></td>
-                `;
+                tr.style.cursor = 'pointer';
+
+                // Slip Link (Place Bet)
+                const tdLink = document.createElement('td');
+                const a = document.createElement('a');
+                a.href = combo.sliplink;
+                a.textContent = 'Place Bet';
+                a.target = '_blank';
+                a.style.color = '#22c55e';
+                a.style.fontWeight = '700';
+                a.onclick = e => e.stopImmediatePropagation();
+                tdLink.appendChild(a);
+                tr.appendChild(tdLink);
+
+                // Players
+                const tdPlayers = document.createElement('td');
+                tdPlayers.innerHTML = `<strong>${combo.players}</strong>`;
+                tr.appendChild(tdPlayers);
+
+                // Edge
+                const tdEdge = document.createElement('td');
+                tdEdge.style.color = '#00ffcc';
+                tdEdge.style.fontWeight = '700';
+                tdEdge.textContent = (combo.edge || 0).toFixed(1) + '%';
+                tr.appendChild(tdEdge);
+
+                // Cash Likelihood
+                const tdCash = document.createElement('td');
+                tdCash.textContent = (combo.cashlikelihood || 0).toFixed(1) + '%';
+                tr.appendChild(tdCash);
+
+                // Payout
+                const tdPayout = document.createElement('td');
+                tdPayout.innerHTML = `<span style="background:#333;padding:2px 8px;border-radius:9999px;font-size:12px;">${combo.payout}</span>`;
+                tr.appendChild(tdPayout);
+
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('betSlipCount').textContent = `(${selectedBets.length} legs)`;
+            document.getElementById('betSlipCount').textContent = `(${selectedBets.length} legs • ${outputData.length} combos)`;
         }
 
         function removeBet(index) {
