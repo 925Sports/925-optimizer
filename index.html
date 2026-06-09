@@ -591,7 +591,7 @@
                     if (s.includes('strikeout') || s.includes('k') || s.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (s.includes('walk') || s.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (s.includes('fantasy')) return calculateFantasyScore(log, sport);
                     if (s.includes('h+r+rbi') || s.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                 } else {
                     // Hitter logic
@@ -600,7 +600,7 @@
                     if (s.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
                     if (s.includes('run') && !s.includes('rbi')) return parseFloat(log.runs || log.R || 0);
                     if (s.includes('ab') || s.includes('at bat')) return parseFloat(log.atBats || log.AB || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (s.includes('fantasy')) return calculateFantasyScore(log, sport);
                     if (s.includes('h+r+rbi') || s.includes('hrrbi') || s.includes('hits+runs+rbis')) {
                         return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                     }
@@ -1371,17 +1371,38 @@
 
             // Add game context info (Game Total, O/U, Point Spread, Opp DVP Rank)
             const gameTotal = row['Game Total'] || row['Total'] || '';
-            const gameOU = row['Game O/U'] || row['O/U'] || row['Over/Under'] || '';
-            const pointSpread = row['Point Spread'] || row['Spread'] || '';
+            const gameOU = parseFloat(row['Game O/U'] || row['O/U'] || row['Over/Under'] || 0);
+            const pointSpread = parseFloat(row['Point Spread'] || row['Spread'] || 0);
             const oppDvpRank = row['Opp DVP Rank'] || row['DVP Rank'] || row['Opponent DVP'] || '';
 
             if (gameTotal || gameOU || pointSpread || oppDvpRank) {
                 const gameInfo = document.createElement('div');
                 gameInfo.style.cssText = 'margin-top:8px; font-size:12px; color:#aaa; display:flex; gap:16px; flex-wrap:wrap;';
+
+                let ouHTML = '';
+                let spreadHTML = '';
+
+                if (sport === 'mlb' && gameOU) {
+                    const ouColor = gameOU >= 9.6 ? 'ou-green' : (gameOU <= 8.4 ? 'ou-red' : 'ou-yellow');
+                    const ouText = gameOU >= 9.6 ? 'High' : (gameOU <= 8.4 ? 'Low' : 'Normal');
+                    ouHTML = `<span class="${ouColor}">Game O/U: <strong>${gameOU}</strong> <span style="font-size:10px;">(${ouText})</span></span>`;
+                } else if (gameOU) {
+                    ouHTML = `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>`;
+                }
+
+                if (sport === 'mlb' && pointSpread) {
+                    let spreadColor = 'spread-yellow';
+                    if (pointSpread < 0) spreadColor = 'spread-green';
+                    else if (Math.abs(pointSpread) > 1.5) spreadColor = 'spread-red';
+                    spreadHTML = `<span class="${spreadColor}">Spread: <strong>${pointSpread}</strong></span>`;
+                } else if (pointSpread) {
+                    spreadHTML = `<span>Point Spread: <strong style="color:#fff;">${pointSpread}</strong></span>`;
+                }
+
                 gameInfo.innerHTML = `
                     ${oppDvpRank ? `<span>Opp DVP Rank: <strong style="color:#fff;">${oppDvpRank}</strong></span>` : ''}
-                    ${gameOU ? `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>` : ''}
-                    ${pointSpread ? `<span>Point Spread: <strong style="color:#fff;">${pointSpread}</strong></span>` : ''}
+                    ${ouHTML}
+                    ${spreadHTML}
                     ${gameTotal ? `<span>Game Total: <strong style="color:#fff;">${gameTotal}</strong></span>` : ''}
                 `;
                 document.getElementById('popupName').appendChild(gameInfo);
@@ -1640,154 +1661,55 @@
                 }, 40);
 
             } else if (tab === 'Splits') {
-                if (sport === 'mlb') {
-                    // === MLB Splits: Exact logic from MLB Optimizer (L5/L10/L20 hit rates + Chart.js bar chart) ===
-                    let playerLogs = (dataStore[sport].gameLogs || []).filter(log => 
-                        nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
-                    );
-                    
-                    const isHitter = !(row.Position || row.Pos || '').toUpperCase().includes('P') && 
-                                     !row['Stat Type'].toLowerCase().includes('pitcher');
-                    
-                    if (isHitter) {
-                        playerLogs = playerLogs.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
-                    } else {
-                        playerLogs = playerLogs.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
-                    }
-                    
-                    playerLogs.sort((a, b) => new Date(b.gameDate || b['gameDate'] || b.date || 0) - new Date(a.gameDate || a['gameDate'] || a.date || 0));
-                    
-                    const recentLogs = playerLogs.slice(0, 20);
-                    const lineScore = parseFloat(row['Line Score'] || row.Line || 0) || 1.5;
-                    const betTagLower = (row['Bet Tag'] || '').toLowerCase();
-                    const isMoreBet = betTagLower.includes('↑') || betTagLower.includes('more') || betTagLower.includes('over');
-                    
-                    const calculateHitRate = (logs) => {
-                        if (!logs.length) return 0;
-                        let hits = 0;
-                        logs.forEach(log => {
-                            let value = getStatValue(log, row['Stat Type'] || '', sport);
-                            if (isMoreBet) {
-                                if (value > lineScore) hits++;
-                            } else {
-                                if (value < lineScore) hits++;
-                            }
-                        });
-                        return ((hits / logs.length) * 100).toFixed(0);
-                    };
-                    
-                    const l5Hit = calculateHitRate(playerLogs.slice(0, 5));
-                    const l10Hit = calculateHitRate(playerLogs.slice(0, 10));
-                    const l20Hit = calculateHitRate(playerLogs.slice(0, 20));
-                    
-                    let html = `
-                        <h3 style="margin-top:0;">Splits for ${playerName}</h3>
-                        <div style="margin-bottom:12px;font-size:13px;color:#888;">Recent Performance (${row['Stat Type']}) - Last 20 Games</div>
-                        <div style="height:280px;position:relative;">
-                            <canvas id="splitsChart"></canvas>
-                        </div>
-                        <div style="margin-top:16px;display:flex;justify-content:space-around;font-size:13px;">
-                            <div>L5 Hit Rate: <span style="color:#22c55e;font-weight:700;">${l5Hit}%</span></div>
-                            <div>L10 Hit Rate: <span style="color:#22c55e;font-weight:700;">${l10Hit}%</span></div>
-                            <div>L20 Hit Rate: <span style="color:#22c55e;font-weight:700;">${l20Hit}%</span></div>
-                        </div>
+                // Improved Splits tab - closer to original MLB tool behavior
+                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+
+                const line = parseFloat(row['Line Score'] || row.Line || 0);
+                const isMore = (row['Bet Tag'] || '').toLowerCase().includes('more') || (row['Bet Tag'] || '').toLowerCase().includes('over');
+
+                // Use last 20 games like original
+                const recentLogs = logs.slice(0, 20);
+
+                let hits = 0;
+                let htmlRows = '';
+
+                recentLogs.forEach(log => {
+                    const val = getStatValue(log, row['Stat Type'] || '', sport);
+                    const hit = isMore ? (val > line) : (val < line);
+                    if (hit) hits++;
+
+                    const color = hit ? '#22c55e' : '#ef4444';
+                    htmlRows += `
+                        <tr>
+                            <td>${log.gameDate || log['GAME DATE'] || log.date || ''}</td>
+                            <td>${log.opponent || log.Opp || ''}</td>
+                            <td style="color:${color}; font-weight:600;">${val}</td>
+                            <td>${hit ? '✓' : '✗'}</td>
+                        </tr>
                     `;
-                    content.innerHTML = html;
-                    
-                    setTimeout(() => {
-                        if (window.ChartDataLabels) {
-                            Chart.register(ChartDataLabels);
-                        }
-                        const ctx = document.getElementById('splitsChart');
-                        if (!ctx) return;
-                        const chartLabels = recentLogs.map(log => log.gameDate ? log.gameDate.slice(5) : '');
-                        const chartValues = recentLogs.map(log => getStatValue(log, row['Stat Type'] || '', sport));
-                        const barColors = chartValues.map(v => v > lineScore ? '#22c55e' : '#ef4444');
-                        
-                        new Chart(ctx, {
-                            type: 'bar',
-                            data: {
-                                labels: chartLabels,
-                                datasets: [{
-                                    label: row['Stat Type'],
-                                    data: chartValues,
-                                    backgroundColor: barColors,
-                                    borderColor: '#fff',
-                                    borderWidth: 1,
-                                    borderRadius: 5
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                scales: {
-                                    y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
-                                    x: { grid: { color: '#333' }, ticks: { color: '#ccc', maxRotation: 45, minRotation: 45 } }
-                                },
-                                plugins: {
-                                    legend: { display: false },
-                                    datalabels: {
-                                        anchor: 'center',
-                                        align: 'center',
-                                        color: '#fff',
-                                        font: { weight: 'bold', size: 11 },
-                                        formatter: (value) => value.toFixed(1)
-                                    }
-                                }
-                            },
-                            plugins: [ChartDataLabels]
-                        });
-                    }, 150);
-                } else {
-                    // NBA / WNBA: keep the previous simple table logic
-                    const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
-                    logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                });
 
-                    const line = parseFloat(row['Line Score'] || row.Line || 0);
-                    const isMore = (row['Bet Tag'] || '').toLowerCase().includes('more') || (row['Bet Tag'] || '').toLowerCase().includes('over');
+                const hitRate = recentLogs.length > 0 ? ((hits / recentLogs.length) * 100).toFixed(0) : 'N/A';
 
-                    const recentLogs = logs.slice(0, 20);
-
-                    let hits = 0;
-                    let htmlRows = '';
-
-                    recentLogs.forEach(log => {
-                        const val = getStatValue(log, row['Stat Type'] || '', sport);
-                        const hit = isMore ? (val > line) : (val < line);
-                        if (hit) hits++;
-
-                        const color = hit ? '#22c55e' : '#ef4444';
-                        htmlRows += `
-                            <tr>
-                                <td>${log.gameDate || log['GAME DATE'] || log.date || ''}</td>
-                                <td>${log.opponent || log.Opp || ''}</td>
-                                <td style="color:${color}; font-weight:600;">${val}</td>
-                                <td>${hit ? '✓' : '✗'}</td>
-                            </tr>
-                        `;
-                    });
-
-                    const hitRate = recentLogs.length > 0 ? ((hits / recentLogs.length) * 100).toFixed(0) : 'N/A';
-
-                    content.innerHTML = `
-                        <div style="padding:12px 8px;">
-                            <h4 style="margin-bottom:6px;">Last 20 Games Splits vs Line</h4>
-                            <div style="margin-bottom:10px; font-size:14px;">
-                                <strong>Line:</strong> ${line} &nbsp;&nbsp; 
-                                <strong>Hit Rate:</strong> <span style="color:#00ffcc; font-weight:700;">${hitRate}%</span> (${hits}/${recentLogs.length})
-                            </div>
-                            <div class="table-wrapper" style="max-height:320px; overflow-y:auto;">
-                                <table style="font-size:12px; width:100%;">
-                                    <thead><tr><th>Date</th><th>Opp</th><th>Value</th><th>Hit</th></tr></thead>
-                                    <tbody>${htmlRows}</tbody>
-                                </table>
-                            </div>
-                            <div style="margin-top:8px; font-size:12px; color:#888;">
-                                Green = Hit the line &nbsp;•&nbsp; Red = Missed
-                            </div>
+                content.innerHTML = `
+                    <div style="padding:12px 8px;">
+                        <h4 style="margin-bottom:6px;">Last 20 Games Splits vs Line</h4>
+                        <div style="margin-bottom:10px; font-size:14px;">
+                            <strong>Line:</strong> ${line} &nbsp;&nbsp; 
+                            <strong>Hit Rate:</strong> <span style="color:#00ffcc; font-weight:700;">${hitRate}%</span> (${hits}/${recentLogs.length})
                         </div>
-                    `;
-                }
+                        <div class="table-wrapper" style="max-height:320px; overflow-y:auto;">
+                            <table style="font-size:12px; width:100%;">
+                                <thead><tr><th>Date</th><th>Opp</th><th>Value</th><th>Hit</th></tr></thead>
+                                <tbody>${htmlRows}</tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top:8px; font-size:12px; color:#888;">
+                            Green = Hit the line &nbsp;•&nbsp; Red = Missed
+                        </div>
+                    </div>
+                `;
             } else if (tab === 'Other Bets') {
                 const others = (dataStore[sport].allData || []).filter(r => r['Player Name'] === playerName && r['Stat Type'] !== row['Stat Type']);
                 if (others.length === 0) {
