@@ -468,7 +468,8 @@
     <div id="betslipPopup" class="popup">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <h3 style="margin:0;">Generated Bet Slips <span id="betSlipCount" style="color:#888;font-size:14px;"></span></h3>
-            <button id="closeBetSlip" style="margin:0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
+            <button id="closeBetSlip" style="margin:0 8px 0 0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
+            <button onclick="clearAllBets()" style="background:#ef4444;color:white;border:none;border-radius:9999px;padding:6px 16px;font-size:13px;cursor:pointer;">Clear All Bets</button>
         </div>
         
         <div class="payout-filter-container" style="margin:12px 0 8px;display:flex;align-items:center;gap:8px;">
@@ -951,7 +952,9 @@
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
             document.getElementById('calloutFilterBtn').onclick = () => showCalloutFilterPopup();
             document.getElementById('advancedFilterBtn').onclick = () => showAdvancedFilterPopup();
-            document.getElementById('betslipBtn').onclick = () => showBetSlipPopup();
+            document.getElementById('betslipBtn').onclick = () => {
+                showBetSlipPopup();
+            };
 
             // Apply buttons for popups (defined in show functions)
         }
@@ -1324,7 +1327,7 @@
             }
 
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
+            header.style.cssText = 'max-width:1400px; margin:0 auto 12px; padding:8px 24px; color:#888; font-size:13px; background:#111; border-radius:8px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
@@ -1858,7 +1861,17 @@
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
+            // Force refresh of selected bets state (helps All tab)
             renderBetSlipsTable();
+        }
+
+        function clearAllBets() {
+            if (confirm('Clear all selected bets?')) {
+                selectedBets = [];
+                document.getElementById('betslipPopup').style.display = 'none';
+                document.getElementById('overlay').style.display = 'none';
+                renderContent(); // Refresh cards to remove selected state
+            }
         }
 
         // ==================== BET SLIP COMBINATION GENERATOR (from original MLB/NBA code) ====================
