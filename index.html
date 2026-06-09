@@ -1583,7 +1583,12 @@
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
 
                         if (sport === 'mlb') {
-                            const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || (log.primaryPosition_name || '').toLowerCase().includes('pitch') === false;
+                            const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || 
+                                             ((log.primaryPosition_name || '').toLowerCase().includes('pitch') === false && parseFloat(log.inningsPitched || log.IP || 0) === 0);
+
+                            // Skip pitcher games that have no IP (blank or "-")
+                            const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
+                            if (!isHitter && ipVal === 0) return;
 
                             let col1 = isHitter 
                                 ? (log.atBats || log.AB || '-') 
@@ -1946,8 +1951,18 @@
                 outputData.push(...(combinations[pickcount] || []));
             }
 
+            // Apply Payout Filter if one is selected
+            const payoutFilterEl = document.getElementById('payoutFilter');
+            if (payoutFilterEl) {
+                payoutFilterEl.onchange = () => renderBetSlipsTable(); // Re-render when filter changes
+            }
+            const selectedPayout = payoutFilterEl ? payoutFilterEl.value : 'all';
+            if (selectedPayout !== 'all') {
+                outputData = outputData.filter(combo => combo.payout === selectedPayout);
+            }
+
             if (outputData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="padding:20px;color:#ffcc00;">Could not generate valid combinations. Make sure you have at least 2 valid bets with good probability data.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" style="padding:20px;color:#ffcc00;">No combinations match the current payout filter, or could not generate valid combinations.</td></tr>`;
                 return;
             }
 
@@ -1978,9 +1993,34 @@
                 tdLink.appendChild(a);
                 tr.appendChild(tdLink);
 
-                // Players
+                // Players (clickable to expand details)
                 const tdPlayers = document.createElement('td');
-                tdPlayers.innerHTML = `<strong>${combo.players}</strong>`;
+                tdPlayers.style.cursor = 'pointer';
+                tdPlayers.innerHTML = `<strong>${combo.players}</strong> <span style="font-size:10px;color:#888;">(click for details)</span>`;
+
+                const detailRowId = 'detail-' + combo.players.replace(/\s+/g, '');
+                tdPlayers.onclick = (e) => {
+                    e.stopImmediatePropagation();
+                    const existingDetail = document.getElementById(detailRowId);
+                    if (existingDetail) {
+                        existingDetail.remove();
+                    } else {
+                        const detailTr = document.createElement('tr');
+                        detailTr.id = detailRowId;
+                        const detailTd = document.createElement('td');
+                        detailTd.colSpan = 5;
+                        detailTd.style.background = '#111';
+                        detailTd.style.padding = '10px';
+                        detailTd.innerHTML = combo.playerdetails.map(d => 
+                            `<div style="margin-bottom:6px; padding:6px; background:#1f1f1f; border-radius:6px;">
+                                <strong>${d.player}</strong> — ${d.choice} ${d.line} ${d.stat} 
+                                <span style="color:#00ffcc;">(Edge: ${d.edge.toFixed(1)}%)</span>
+                            </div>`
+                        ).join('');
+                        detailTr.appendChild(detailTd);
+                        tr.parentNode.insertBefore(detailTr, tr.nextSibling);
+                    }
+                };
                 tr.appendChild(tdPlayers);
 
                 // Edge
