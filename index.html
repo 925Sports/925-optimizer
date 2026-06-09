@@ -377,7 +377,8 @@
             <button id="filterBtn" class="filter-btn">Filter Games/Teams</button>
             <button id="calloutFilterBtn" class="filter-btn">Filter Callouts</button>
             <button id="advancedFilterBtn" class="filter-btn">Filter Bet Tag / Fav / O/U</button>
-            <button id="betslipBtn" class="filter-btn" style="background:#7c3aed;color:white;">Bet Slips (0)</button>
+            <button id="betslipBtn" class="filter-btn" style="background:#7c3aed;color:white;">Bet Slips <span id="betSlipCountHeader">(0)</span></button>
+            <button id="clearBetsBtn" class="filter-btn" style="background:#ef4444;color:white;font-size:12px;padding:8px 14px;">Clear Bets</button>
         </div>
 
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -575,7 +576,10 @@
             if (parts1.length > 1 && parts2.length > 1) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                if (last1 && last2 && last1 === last2) return true;
+                // Only allow last-name match if both names have at least a first + last
+                if (last1 && last2 && last1 === last2 && last1.length > 3) {
+                    return true;
+                }
             }
             return false;
         }
@@ -956,6 +960,20 @@
                 showBetSlipPopup();
             };
 
+            // Global Clear All Bets button
+            const clearBtn = document.getElementById('clearBetsBtn');
+            if (clearBtn) {
+                clearBtn.onclick = () => {
+                    if (selectedBets.length > 0 && confirm(`Clear all ${selectedBets.length} selected bets?`)) {
+                        selectedBets = [];
+                        renderContent();
+                        // Update header count if exists
+                        const headerCount = document.getElementById('betSlipCountHeader');
+                        if (headerCount) headerCount.textContent = '(0)';
+                    }
+                };
+            }
+
             // Apply buttons for popups (defined in show functions)
         }
 
@@ -1334,11 +1352,15 @@
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Append cards directly (same as NBA/WNBA/MLB tabs) for consistent formatting
+            // Append cards in a grid container for consistent formatting with other tabs
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; max-width:1400px; margin:0 auto; padding:0 16px;';
+            
             allRows.slice(0, 300).forEach((row, idx) => {
                 const card = createPlayerCard(row, idx, row._sport);
-                contentDiv.appendChild(card);
+                grid.appendChild(card);
             });
+            contentDiv.appendChild(grid);
         }
 
         // ==================== PLAYER POPUP ====================
