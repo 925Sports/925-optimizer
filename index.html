@@ -906,9 +906,16 @@
                 }
             };
 
-            // View select
+            // View select (now works on All tab too - shows message for table)
             viewSelect.onchange = () => {
-                if (currentSport !== 'all') {
+                if (currentSport === 'all') {
+                    if (viewSelect.value === 'table') {
+                        alert('Table view is only available when viewing a single sport (NBA, WNBA, or MLB).');
+                        viewSelect.value = 'cards';
+                        return;
+                    }
+                    renderAllView();
+                } else {
                     dataStore[currentSport].currentView = viewSelect.value;
                     renderContent();
                 }
@@ -942,7 +949,6 @@
             const clearBetsBtn = document.getElementById('clearBetsBtn');
             if (clearBetsBtn) {
                 clearBetsBtn.onclick = () => {
-                    if (!confirm('Clear all selected bets (including ones from previous sessions)?')) return;
                     selectedBets = [];
                     try { localStorage.removeItem('pp_selectedBets'); } catch(e){}
                     updateBetSlipCount();
@@ -1804,7 +1810,10 @@
 
         // ==================== FILTER POPUPS ====================
         function showFilterPopup() {
-            if (currentSport === 'all') { alert('Filters work per sport. Switch to a specific sport.'); return; }
+            if (currentSport === 'all') { 
+                alert('Game/Team filters are per-sport. Please switch to NBA, WNBA, or MLB tab to use this filter.');
+                return; 
+            }
             const store = dataStore[currentSport];
             const popup = document.getElementById('popup');
             const overlay = document.getElementById('overlay');
@@ -1844,7 +1853,10 @@
         }
 
         function showCalloutFilterPopup() {
-            if (currentSport === 'all') { alert('Filters work per sport.'); return; }
+            if (currentSport === 'all') { 
+                alert('Callout filters are per-sport. Please switch to NBA, WNBA, or MLB tab to use this filter.');
+                return; 
+            }
             const store = dataStore[currentSport];
             const popup = document.getElementById('calloutPopup');
             const overlay = document.getElementById('overlay');
@@ -1870,7 +1882,10 @@
         }
 
         function showAdvancedFilterPopup() {
-            if (currentSport === 'all') { alert('Filters work per sport.'); return; }
+            if (currentSport === 'all') { 
+                alert('Advanced filters (Bet Tag / Fav / O/U) are per-sport. Please switch to NBA, WNBA, or MLB tab to use them.');
+                return; 
+            }
             const store = dataStore[currentSport];
             const popup = document.getElementById('advancedFilterPopup');
             const overlay = document.getElementById('overlay');
