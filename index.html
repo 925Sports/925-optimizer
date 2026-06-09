@@ -1318,6 +1318,7 @@
             contentDiv.className = '';
             contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
+            currentSport = 'all';
             let allRows = [];
             ['nba', 'wnba', 'mlb'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
@@ -1346,6 +1347,8 @@
             // Sort by edge desc by default
             allRows.sort((a, b) => (parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0)));
 
+            currentFiltered = allRows; // Important for popup navigation
+
             if (allRows.length === 0) {
                 contentDiv.innerHTML = '<div class="loading">No bets available across sports for current filters.</div>';
                 return;
@@ -1361,7 +1364,7 @@
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Append cards in a grid container for consistent formatting with other tabs
+            // Clean grid - same structure as individual sport tabs for consistent formatting
             const grid = document.createElement('div');
             grid.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; max-width:1400px; margin:0 auto; padding:0 16px;';
             
