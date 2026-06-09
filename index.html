@@ -1256,6 +1256,8 @@
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
+            const playerName = row['Player Name'] || '';
+
             // Header
             const betTag = (row['Bet Tag'] || '').trim();
             const lineVal = row['Line Score'] || row.Line || '-';
@@ -1385,11 +1387,16 @@
             // Nav
             document.getElementById('prevPlayer').onclick = () => navigatePopup(-1);
             document.getElementById('nextPlayer').onclick = () => navigatePopup(1);
-            document.getElementById('closePlayerPopup').onclick = () => {
-                popup.style.display = 'none';
-                overlay.style.display = 'none';
-                if (currentChart) { currentChart.destroy(); currentChart = null; }
-            };
+            // Close button - use addEventListener for reliability
+            const closeBtn = document.getElementById('closePlayerPopup');
+            if (closeBtn) {
+                closeBtn.onclick = null; // clear any previous
+                closeBtn.onclick = () => {
+                    popup.style.display = 'none';
+                    overlay.style.display = 'none';
+                    if (currentChart) { currentChart.destroy(); currentChart = null; }
+                };
+            }
         }
 
         function navigatePopup(delta) {
