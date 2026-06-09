@@ -570,14 +570,17 @@
             if (n1 === n2) return true;
             if (n1.includes(n2) || n2.includes(n1)) return true;
 
-            // Extra fuzzy: last name match if first names are close
-            const parts1 = logName.toLowerCase().split(/\s+/);
-            const parts2 = playerName.toLowerCase().split(/\s+/);
-            if (parts1.length > 1 && parts2.length > 1) {
+            // Strict matching for MLB (especially pitchers): last name + first initial
+            const parts1 = logName.toLowerCase().split(/\s+/).filter(Boolean);
+            const parts2 = playerName.toLowerCase().split(/\s+/).filter(Boolean);
+
+            if (parts1.length >= 2 && parts2.length >= 2) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                // Only allow last-name match if both names have at least a first + last
-                if (last1 && last2 && last1 === last2 && last1.length > 3) {
+                const firstInitial1 = parts1[0][0];
+                const firstInitial2 = parts2[0][0];
+
+                if (last1 && last2 && last1 === last2 && last1.length > 3 && firstInitial1 === firstInitial2) {
                     return true;
                 }
             }
@@ -1396,17 +1399,29 @@
             currentPopupSport = sport;
             currentRowIndex = index;
 
-            // Show quick loading indicator
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
-            popupEl.style.display = 'block';
-            overlayEl.style.display = 'block';
-            popupEl.innerHTML = `<div style="padding:40px;text-align:center;color:#00ffcc;">Loading player details...</div>`;
 
-            // Load game logs on demand
+            // Show popup immediately with loading state
+            popup.style.display = 'block';
+            overlay.style.display = 'block';
+
+            // Simple loading message while game logs load (especially important for MLB)
+            popup.innerHTML = `
+                <div style="padding:50px 20px; text-align:center; color:#888; min-height:300px;">
+                    <div style="margin-bottom:16px; font-size:15px;">Loading player details & game logs...</div>
+                    <div style="width:140px; height:3px; background:#222; margin:0 auto; border-radius:3px; overflow:hidden;">
+                        <div style="height:100%; width:35%; background:#00ffcc; animation: loading-bar 1.2s infinite;"></div>
+                    </div>
+                </div>
+            `;
+
+            // Load game logs on demand (this can take time on first load for MLB)
             await ensureGameLogsLoaded(sport);
 
-            // Re-select elements after async game log load
+            // Clear loading state and continue with normal popup rendering
+            popup.innerHTML = '';
+
             const popupEl = document.getElementById('playerPopup');
             const overlayEl = document.getElementById('overlay');
 
