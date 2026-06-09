@@ -906,7 +906,7 @@
                 }
             };
 
-            // View select (now works on All tab too - shows message for table)
+            // View select (Table view now properly supported on individual sports)
             viewSelect.onchange = () => {
                 if (currentSport === 'all') {
                     if (viewSelect.value === 'table') {
@@ -1585,6 +1585,29 @@
                                 <td>${bb}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
+                            </tr>`;
+                        } else if (sport === 'nba') {
+                            // NBA Game Log row (modeled after the clean NBA code)
+                            const min = log.MIN || log.minutes || '-';
+                            const pts = log.PTS || log.points || 0;
+                            const reb = log.REB || log.rebounds || 0;
+                            const ast = log.AST || log.assists || 0;
+                            const threePM = log['3PM'] || log.threePointersMade || 0;
+                            const fgm = log.FGM || 0;
+                            const fga = log.FGA || 0;
+                            const ftm = log.FTM || 0;
+                            const fta = log.FTA || 0;
+                            html += `<tr>
+                                <td>${date}</td>
+                                <td>${opp}</td>
+                                <td>${min}</td>
+                                <td>${pts}</td>
+                                <td>${reb}</td>
+                                <td>${ast}</td>
+                                <td>${threePM}</td>
+                                <td>${fgm}/${fga}</td>
+                                <td>${ftm}/${fta}</td>
+                                <td style="color:#00ffcc;font-weight:700">${fp}</td>
                             </tr>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
