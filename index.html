@@ -1348,13 +1348,13 @@
                 return;
             }
 
-            // Subtle, non-distracting summary text placed above cards but below stat type tabs
+            // Clean summary text placed clearly above the player cards (not to the left)
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:2px auto 10px; padding:2px 24px; color:#666; font-size:11.5px; opacity:0.75;';
+            header.style.cssText = 'max-width:1400px; margin:0 auto 10px; padding:6px 24px; color:#888; font-size:12px; border-bottom:1px solid #222;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#666">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
             // Append cards in a grid container for consistent formatting with other tabs
@@ -1583,7 +1583,16 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+
+                // Extra strict filter for MLB pitchers to avoid pulling wrong player's games
+                if (sport === 'mlb' && !isHitter) {
+                    logs = logs.filter(log => {
+                        const ip = parseFloat(log.inningsPitched || log.IP || 0);
+                        return ip > 0; // Only games where they actually pitched
+                    });
+                }
+
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
