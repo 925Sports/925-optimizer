@@ -377,8 +377,7 @@
             <button id="filterBtn" class="filter-btn">Filter Games/Teams</button>
             <button id="calloutFilterBtn" class="filter-btn">Filter Callouts</button>
             <button id="advancedFilterBtn" class="filter-btn">Filter Bet Tag / Fav / O/U</button>
-            <button id="betslipBtn" class="filter-btn" style="background:#7c3aed;color:white;">Bet Slips <span id="betSlipCountHeader">(0)</span></button>
-            <button id="clearBetsBtn" class="filter-btn" style="background:#ef4444;color:white;font-size:12px;padding:8px 14px;">Clear Bets</button>
+            <button id="betslipBtn" class="filter-btn" style="background:#7c3aed;color:white;">Bet Slips (0)</button>
         </div>
 
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -469,8 +468,7 @@
     <div id="betslipPopup" class="popup">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <h3 style="margin:0;">Generated Bet Slips <span id="betSlipCount" style="color:#888;font-size:14px;"></span></h3>
-            <button id="closeBetSlip" style="margin:0 8px 0 0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
-            <button onclick="clearAllBets()" style="background:#ef4444;color:white;border:none;border-radius:9999px;padding:6px 16px;font-size:13px;cursor:pointer;">Clear All Bets</button>
+            <button id="closeBetSlip" style="margin:0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
         </div>
         
         <div class="payout-filter-container" style="margin:12px 0 8px;display:flex;align-items:center;gap:8px;">
@@ -576,10 +574,7 @@
             if (parts1.length > 1 && parts2.length > 1) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                // Only allow last-name match if both names have at least a first + last
-                if (last1 && last2 && last1 === last2 && last1.length > 3) {
-                    return true;
-                }
+                if (last1 && last2 && last1 === last2) return true;
             }
             return false;
         }
@@ -956,27 +951,7 @@
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
             document.getElementById('calloutFilterBtn').onclick = () => showCalloutFilterPopup();
             document.getElementById('advancedFilterBtn').onclick = () => showAdvancedFilterPopup();
-            document.getElementById('betslipBtn').onclick = () => {
-                showBetSlipPopup();
-            };
-
-            // Global Clear All Bets button
-            const clearBtn = document.getElementById('clearBetsBtn');
-            if (clearBtn) {
-                clearBtn.onclick = () => {
-                    if (selectedBets.length > 0 && confirm(`Clear all ${selectedBets.length} selected bets?`)) {
-                        selectedBets = [];
-                        // Properly re-render whether on All tab or specific sport
-                        if (typeof currentSport !== 'undefined' && currentSport === 'all') {
-                            renderAllView();
-                        } else {
-                            renderContent();
-                        }
-                        const headerCount = document.getElementById('betSlipCountHeader');
-                        if (headerCount) headerCount.textContent = '(0)';
-                    }
-                };
-            }
+            document.getElementById('betslipBtn').onclick = () => showBetSlipPopup();
 
             // Apply buttons for popups (defined in show functions)
         }
@@ -1348,24 +1323,19 @@
                 return;
             }
 
-            // Subtle, non-distracting summary text placed above cards but below stat type tabs
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:2px auto 10px; padding:2px 24px; color:#666; font-size:11.5px; opacity:0.75;';
+            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Append cards in a grid container for consistent formatting with other tabs
-            const grid = document.createElement('div');
-            grid.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; max-width:1400px; margin:0 auto; padding:0 16px;';
-            
+            // Append cards directly (same as NBA/WNBA/MLB tabs) for consistent formatting
             allRows.slice(0, 300).forEach((row, idx) => {
                 const card = createPlayerCard(row, idx, row._sport);
-                grid.appendChild(card);
+                contentDiv.appendChild(card);
             });
-            contentDiv.appendChild(grid);
         }
 
         // ==================== PLAYER POPUP ====================
@@ -1888,17 +1858,7 @@
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
-            // Force refresh of selected bets state (helps All tab)
             renderBetSlipsTable();
-        }
-
-        function clearAllBets() {
-            if (confirm('Clear all selected bets?')) {
-                selectedBets = [];
-                document.getElementById('betslipPopup').style.display = 'none';
-                document.getElementById('overlay').style.display = 'none';
-                renderContent(); // Refresh cards to remove selected state
-            }
         }
 
         // ==================== BET SLIP COMBINATION GENERATOR (from original MLB/NBA code) ====================
