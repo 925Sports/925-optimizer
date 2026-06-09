@@ -393,7 +393,11 @@
                 <option value="table">Table</option>
             </select>
 
-            <!-- Only dropdown for Standard/Demon/Goblin (removed duplicate toggle buttons per request) -->
+            <div class="toggle" id="oddsToggle">
+                <button class="toggle-btn active" data-type="standard">Standard</button>
+                <button class="toggle-btn" data-type="demon">Demon</button>
+                <button class="toggle-btn" data-type="goblin">Goblin</button>
+            </div>
 
             <div class="selected-switch">
                 <span style="font-size:12px;color:#aaa;">Selected Only</span>
@@ -538,6 +542,7 @@
         const selectedToggle = document.getElementById('selectedToggle');
         const oddsSelect = document.getElementById('oddsSelect');
         const viewSelect = document.getElementById('viewSelect');
+        const oddsToggle = document.getElementById('oddsToggle');
         const tabsDiv = document.getElementById('tabs');
 
         // ==================== UTILS ====================
@@ -565,17 +570,14 @@
             if (n1 === n2) return true;
             if (n1.includes(n2) || n2.includes(n1)) return true;
 
-            // Strict matching for MLB (especially pitchers): last name + first initial
-            const parts1 = logName.toLowerCase().split(/\s+/).filter(Boolean);
-            const parts2 = playerName.toLowerCase().split(/\s+/).filter(Boolean);
-
-            if (parts1.length >= 2 && parts2.length >= 2) {
+            // Extra fuzzy: last name match if first names are close
+            const parts1 = logName.toLowerCase().split(/\s+/);
+            const parts2 = playerName.toLowerCase().split(/\s+/);
+            if (parts1.length > 1 && parts2.length > 1) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                const firstInitial1 = parts1[0][0];
-                const firstInitial2 = parts2[0][0];
-
-                if (last1 && last2 && last1 === last2 && last1.length > 3 && firstInitial1 === firstInitial2) {
+                // Only allow last-name match if both names have at least a first + last
+                if (last1 && last2 && last1 === last2 && last1.length > 3) {
                     return true;
                 }
             }
@@ -923,17 +925,32 @@
                 }
             };
 
-            // Odds type select (dropdown only)
+            // Odds type select (sync with toggle)
             oddsSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
                 } else {
                     dataStore[currentSport].currentOddsType = oddsSelect.value;
+                    // sync toggle buttons
+                    document.querySelectorAll('#oddsToggle button').forEach(b => b.classList.remove('active'));
+                    const match = document.querySelector(`#oddsToggle button[data-type="${oddsSelect.value}"]`);
+                    if (match) match.classList.add('active');
                     renderContent();
                 }
             };
 
-            // Odds toggle buttons removed (only using dropdown now)
+            // Odds toggle buttons
+            document.querySelectorAll('#oddsToggle button').forEach(btn => {
+                btn.onclick = () => {
+                    if (currentSport === 'all') return;
+                    document.querySelectorAll('#oddsToggle button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const type = btn.dataset.type;
+                    dataStore[currentSport].currentOddsType = type;
+                    oddsSelect.value = type;
+                    renderContent();
+                };
+            });
 
             // Filter buttons
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
@@ -1298,7 +1315,6 @@
             contentDiv.className = '';
             contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
-            currentSport = 'all';
             let allRows = [];
             ['nba', 'wnba', 'mlb'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
@@ -1327,24 +1343,21 @@
             // Sort by edge desc by default
             allRows.sort((a, b) => (parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0)));
 
-            currentFiltered = allRows; // Important for popup navigation
-
             if (allRows.length === 0) {
                 contentDiv.innerHTML = '<div class="loading">No bets available across sports for current filters.</div>';
                 return;
             }
 
+            // Subtle, non-distracting summary text placed above cards but below stat type tabs
+            const header = document.createElement('div');
+            header.style.cssText = 'max-width:1400px; margin:2px auto 10px; padding:2px 24px; color:#666; font-size:11.5px; opacity:0.75;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-
-            // Clean single header (placed after stat type tabs, before cards)
-            const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:4px auto 10px; padding:0 24px; color:#666; font-size:11.5px;';
             header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
-            // Clean grid - matches MLB tab layout exactly
+            // Append cards in a grid container for consistent formatting with other tabs
             const grid = document.createElement('div');
             grid.style.cssText = 'display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px; max-width:1400px; margin:0 auto; padding:0 16px;';
             
@@ -1353,9 +1366,6 @@
                 grid.appendChild(card);
             });
             contentDiv.appendChild(grid);
-
-            // Summary text moved BELOW the player cards so cards can format correctly and consistently
-            // Removed duplicate summary text completely (user request)
         }
 
         // ==================== PLAYER POPUP ====================
@@ -1364,17 +1374,13 @@
             currentPopupSport = sport;
             currentRowIndex = index;
 
+            // Load game logs on demand (this is the key speed improvement)
+            await ensureGameLogsLoaded(sport);
+
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
-
             popup.style.display = 'block';
             overlay.style.display = 'block';
-
-            // Load game logs on demand in background (no blocking loading screen)
-            ensureGameLogsLoaded(sport); // fire and forget
-
-            const popupEl = document.getElementById('playerPopup');
-            const overlayEl = document.getElementById('overlay');
 
             // Header
             const betTag = (row['Bet Tag'] || '').trim();
@@ -1447,8 +1453,8 @@
             document.getElementById('prevPlayer').onclick = () => navigatePopup(-1);
             document.getElementById('nextPlayer').onclick = () => navigatePopup(1);
             document.getElementById('closePlayerPopup').onclick = () => {
-                popupEl.style.display = 'none';
-                overlayEl.style.display = 'none';
+                popup.style.display = 'none';
+                overlay.style.display = 'none';
                 if (currentChart) { currentChart.destroy(); currentChart = null; }
             };
         }
@@ -1577,25 +1583,7 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const propIsHitter = parseFloat(row.atBats || row.AB || 0) > 0 || 
-                                     !((row.Position || '').toUpperCase().includes('P'));
-
-                let logs = (dataStore[sport].gameLogs || []).filter(l => {
-                    const logName = l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '';
-                    return nameMatches(logName, playerName);
-                });
-
-                // Participation filter for MLB
-                if (sport === 'mlb') {
-                    logs = logs.filter(log => {
-                        if (propIsHitter) {
-                            return parseFloat(log.atBats || log.AB || 0) >= 0; // allow all hitter games with name match
-                        } else {
-                            return parseFloat(log.inningsPitched || log.IP || log['IP'] || 0) >= 1.0;
-                        }
-                    });
-                }
-
+                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
@@ -1628,9 +1616,9 @@
                             const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || 
                                              ((log.primaryPosition_name || '').toLowerCase().includes('pitch') === false && parseFloat(log.inningsPitched || log.IP || 0) === 0);
 
-                            // Strict filter for pitchers: only include games where they actually pitched (IP > 0)
+                            // Skip pitcher games that have no IP (blank or "-")
                             const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
-                            if (!isHitter && ipVal <= 0) return;
+                            if (!isHitter && ipVal === 0) return;
 
                             let col1 = isHitter 
                                 ? (log.atBats || log.AB || '-') 
