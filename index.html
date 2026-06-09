@@ -392,12 +392,6 @@
                 <option value="table">Table</option>
             </select>
 
-            <div class="toggle" id="oddsToggle">
-                <button class="toggle-btn active" data-type="standard">Standard</button>
-                <button class="toggle-btn" data-type="demon">Demon</button>
-                <button class="toggle-btn" data-type="goblin">Goblin</button>
-            </div>
-
             <div class="selected-switch">
                 <span style="font-size:12px;color:#aaa;">Selected Only</span>
                 <label class="switch">
@@ -405,6 +399,8 @@
                     <span class="slider"></span>
                 </label>
             </div>
+
+            <button id="clearBetsBtn" class="filter-btn" style="background:#ef4444;color:white;">Clear Bets</button>
         </div>
     </div>
 
@@ -926,38 +922,42 @@
                 }
             };
 
-            // Odds type select (sync with toggle)
+            // Odds type select (dropdown only now)
             oddsSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
                 } else {
                     dataStore[currentSport].currentOddsType = oddsSelect.value;
-                    // sync toggle buttons
-                    document.querySelectorAll('#oddsToggle button').forEach(b => b.classList.remove('active'));
-                    const match = document.querySelector(`#oddsToggle button[data-type="${oddsSelect.value}"]`);
-                    if (match) match.classList.add('active');
                     renderContent();
                 }
             };
-
-            // Odds toggle buttons
-            document.querySelectorAll('#oddsToggle button').forEach(btn => {
-                btn.onclick = () => {
-                    if (currentSport === 'all') return;
-                    document.querySelectorAll('#oddsToggle button').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const type = btn.dataset.type;
-                    dataStore[currentSport].currentOddsType = type;
-                    oddsSelect.value = type;
-                    renderContent();
-                };
-            });
 
             // Filter buttons
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
             document.getElementById('calloutFilterBtn').onclick = () => showCalloutFilterPopup();
             document.getElementById('advancedFilterBtn').onclick = () => showAdvancedFilterPopup();
             document.getElementById('betslipBtn').onclick = () => showBetSlipPopup();
+
+            // Clear Bets button (clears persisted selectedBets from localStorage)
+            const clearBetsBtn = document.getElementById('clearBetsBtn');
+            if (clearBetsBtn) {
+                clearBetsBtn.onclick = () => {
+                    if (!confirm('Clear all selected bets (including ones from previous sessions)?')) return;
+                    selectedBets = [];
+                    try { localStorage.removeItem('pp_selectedBets'); } catch(e){}
+                    updateBetSlipCount();
+                    if (currentSport === 'all') {
+                        renderAllView();
+                    } else {
+                        renderContent();
+                    }
+                    // If bet slip popup is open, refresh it
+                    const betSlipPopup = document.getElementById('betslipPopup');
+                    if (betSlipPopup && betSlipPopup.style.display === 'block') {
+                        renderBetSlipsTable();
+                    }
+                };
+            }
 
             // Apply buttons for popups (defined in show functions)
         }
