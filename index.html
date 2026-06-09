@@ -581,39 +581,36 @@
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
             if (sport === 'mlb') {
-                // Determine if this stat is for a pitcher (use both position in log + stat name)
-                const isPitcherStat = s.includes('pitcher') || s.includes('ip') || s.includes('er') || 
-                                      s.includes('strikeout') || s.includes('earned run') || s.includes('innings');
-                const isHitterFantasy = s.includes('hitter fantasy');
-                const isPitcherFantasy = s.includes('pitcher fantasy');
-                const isFantasyScore = s.includes('fantasy score');
+                const lowerStat = s;
 
-                const isPitcher = (log.position || '').toUpperCase().includes('P') || isPitcherStat || isPitcherFantasy;
+                if (lowerStat.includes('fantasy score')) {
+                    return calculateFantasyScore(log, sport);
+                }
 
-                if (isPitcher || isPitcherFantasy) {
-                    if (s.includes('innings') || s.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
-                    if (s.includes('earned') || s.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (s.includes('strikeout') || s.includes('k') || s.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
-                    if (s.includes('walk') || s.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
-                    if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
-                    if (isFantasyScore || isPitcherFantasy) {
-                        return calculateFantasyScore(log, sport);
-                    }
-                    if (s.includes('h+r+rbi') || s.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
+                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
+                                  lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
+                                  lowerStat.includes('strikeout') || lowerStat.includes('earned run');
+
+                if (isPitcher) {
+                    if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
+                    if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                    if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
+                    if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
+                    if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
+                    if (lowerStat.includes('h+r+rbi') || lowerStat.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                 } else {
-                    // Hitter logic (including Hitter Fantasy Score)
-                    if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hits || log.H || 0);
-                    if (s.includes('home run') || s.includes('hr')) return parseFloat(log.homeRuns || log.HR || 0);
-                    if (s.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
-                    if (s.includes('run') && !s.includes('rbi')) return parseFloat(log.runs || log.R || 0);
-                    if (s.includes('ab') || s.includes('at bat')) return parseFloat(log.atBats || log.AB || 0);
-                    if (isFantasyScore || isHitterFantasy) {
-                        return calculateFantasyScore(log, sport);
-                    }
-                    if (s.includes('h+r+rbi') || s.includes('hrrbi') || s.includes('hits+runs+rbis')) {
+                    // Hitter logic
+                    if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hits || log.H || 0);
+                    if (lowerStat.includes('home run') || lowerStat.includes('hr')) return parseFloat(log.homeRuns || log.HR || 0);
+                    if (lowerStat.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
+                    if (lowerStat.includes('run') && !lowerStat.includes('rbi')) return parseFloat(log.runs || log.R || 0);
+                    if (lowerStat.includes('ab') || lowerStat.includes('at bat')) return parseFloat(log.atBats || log.AB || 0);
+                    if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
+                    if (lowerStat.includes('h+r+rbi') || lowerStat.includes('hrrbi') || lowerStat.includes('hits+runs+rbis')) {
                         return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                     }
-                    if (s.includes('walk') || s.includes('bb')) {
+                    if (lowerStat.includes('walk') || lowerStat.includes('bb')) {
                         return parseFloat(log.baseOnBalls || log.BB || 0);
                     }
                 }
@@ -1420,7 +1417,7 @@
                 content.appendChild(chartDiv);
 
                 const ctx = document.getElementById('projectionChart').getContext('2d');
-                const projections = [
+                let projections = [
                     { name: 'Avg Proj', value: parseFloat(row['Average Projected'] || row.Proj || 0) },
                     { name: 'DVP Adj', value: parseFloat(row['DVP Adjusted'] || row.DVP || 0) },
                     { name: 'Total Proj', value: parseFloat(row['Total Projection'] || row.Total || 0) },
@@ -1428,6 +1425,9 @@
                     { name: 'Line', value: parseFloat(row['Line Score'] || row.Line || 0) },
                     { name: 'UD Line', value: parseFloat(row['Underdog Line'] || 0) }
                 ].filter(p => p.value > 0);
+
+                // Sort from highest to lowest (as requested)
+                projections.sort((a, b) => b.value - a.value);
 
                 const labels = projections.map(p => p.name);
                 const values = projections.map(p => p.value);
@@ -1523,7 +1523,18 @@
 
                     logs.slice(0, 30).forEach(log => {
                         const date = log.gameDate || log['GAME DATE'] || log.date || '';
-                        let opp = log.opponent || log.Opp || log['Opp'] || log['Opponent'] || '';
+                        
+                        // Improved Opp detection matching MLB code
+                        let opp = '';
+                        if (sport === 'mlb') {
+                            const homeAbbr = log.home_team_abbreviation || '';
+                            const awayAbbr = log.away_team_abbreviation || '';
+                            const playerTeam = row.Team || '';
+                            if (playerTeam === homeAbbr) opp = awayAbbr;
+                            else if (playerTeam === awayAbbr) opp = homeAbbr;
+                        }
+                        if (!opp) opp = log.opponent || log.Opp || log['Opp'] || log['Opponent'] || '';
+                        
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
 
                         if (sport === 'mlb') {
