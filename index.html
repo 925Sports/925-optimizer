@@ -1543,19 +1543,21 @@
                     }
                     html += `</tr></thead><tbody>`;
 
-                    logs.slice(0, 25).forEach(log => {
-                        const date = log.gameDate || log['GAME DATE'] || log.date || '';
-                        let opp = log.opponent || log.Opp || '';
+                    logs.slice(0, 30).forEach(log => {
+                        const date = log.gameDate || log['GAME DATE'] || log.date || log['Date'] || '';
+                        let opp = log.opponent || log.Opp || log['Opp'] || log['Opponent'] || '';
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
+
                         if (sport === 'mlb') {
+                            // More robust MLB Game Log row
                             html += `<tr>
                                 <td>${date}</td>
                                 <td>${opp}</td>
-                                <td>${log.inningsPitched || log.IP || '-'}</td>
-                                <td>${log.earnedRuns || log.ER || 0}</td>
-                                <td>${log.hits || log.H || 0}</td>
-                                <td>${log.strikeOuts || log.K || 0}</td>
-                                <td>${log.baseOnBalls || log.BB || 0}</td>
+                                <td>${log.inningsPitched || log.IP || log['IP'] || '-'}</td>
+                                <td>${log.earnedRuns || log.ER || log['ER'] || 0}</td>
+                                <td>${log.hits || log.H || log['H'] || 0}</td>
+                                <td>${log.strikeOuts || log.K || log['K'] || 0}</td>
+                                <td>${log.baseOnBalls || log.BB || log['BB'] || 0}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                             </tr>`;
                         } else {
@@ -1808,6 +1810,12 @@
 
             if (selectedBets.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#888;">No bets selected yet. Click More/Less on any player card.</td></tr>`;
+                return;
+            }
+
+            // Performance guard - don't try to generate combinations if too many bets
+            if (selectedBets.length > 12) {
+                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Too many bets selected for combination generation. Please reduce to 10 or fewer for best performance.</td></tr>`;
                 return;
             }
 
