@@ -1811,7 +1811,7 @@
         // ==================== FILTER POPUPS ====================
         function showFilterPopup() {
             if (currentSport === 'all') { 
-                alert('Game/Team filters are per-sport. Please switch to NBA, WNBA, or MLB tab to use this filter.');
+                alert('Game/Team filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -1854,7 +1854,7 @@
 
         function showCalloutFilterPopup() {
             if (currentSport === 'all') { 
-                alert('Callout filters are per-sport. Please switch to NBA, WNBA, or MLB tab to use this filter.');
+                alert('Callout filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -1883,7 +1883,7 @@
 
         function showAdvancedFilterPopup() {
             if (currentSport === 'all') { 
-                alert('Advanced filters (Bet Tag / Fav / O/U) are per-sport. Please switch to NBA, WNBA, or MLB tab to use them.');
+                alert('Advanced filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -2114,11 +2114,11 @@
         }
 
         function clearAllBets() {
-            if (!confirm('Clear all selected bets?')) return;
             selectedBets = [];
             try { localStorage.removeItem('pp_selectedBets'); } catch(e){}
             updateBetSlipCount();
-            document.getElementById('betslipsBody').innerHTML = `<tr><td colspan="7" style="padding:20px;color:#888;">All bets cleared.</td></tr>`;
+            const betSlipBody = document.getElementById('betslipsBody');
+            if (betSlipBody) betSlipBody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#888;">All bets cleared.</td></tr>`;
             if (currentSport === 'all') renderAllView(); else renderContent();
         }
 
