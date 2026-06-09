@@ -1628,11 +1628,12 @@
             } else if (tab === 'Game Log') {
                 let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
 
-                // Extra strict filter for MLB pitchers to avoid pulling wrong player's games
+                // Extra strict filter for MLB pitchers
                 if (sport === 'mlb' && !isHitter) {
                     logs = logs.filter(log => {
                         const ip = parseFloat(log.inningsPitched || log.IP || 0);
-                        return ip > 0; // Only games where they actually pitched
+                        // Must have pitched a meaningful amount and name must match well
+                        return ip > 0.1 && nameMatches(log.fullName || log['fullName'] || '', playerName);
                     });
                 }
 
