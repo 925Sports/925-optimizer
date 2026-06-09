@@ -1366,6 +1366,28 @@
                 grid.appendChild(card);
             });
             contentDiv.appendChild(grid);
+
+            // Re-attach critical global button handlers (fixes All tab buttons not working until switching sports)
+            setTimeout(() => {
+                const btns = {
+                    'filterBtn': () => showFilterPopup ? showFilterPopup() : null,
+                    'calloutFilterBtn': () => showCalloutFilterPopup ? showCalloutFilterPopup() : null,
+                    'advancedFilterBtn': () => showAdvancedFilterPopup ? showAdvancedFilterPopup() : null,
+                    'betslipBtn': () => showBetSlipPopup(),
+                    'clearBetsBtn': () => {
+                        if (selectedBets.length > 0 && confirm(`Clear all ${selectedBets.length} selected bets?`)) {
+                            selectedBets = [];
+                            renderAllView();
+                            const hc = document.getElementById('betSlipCountHeader');
+                            if (hc) hc.textContent = '(0)';
+                        }
+                    }
+                };
+                Object.keys(btns).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && btns[id]) el.onclick = btns[id];
+                });
+            }, 50);
         }
 
         // ==================== PLAYER POPUP ====================
@@ -1374,7 +1396,14 @@
             currentPopupSport = sport;
             currentRowIndex = index;
 
-            // Load game logs on demand (this is the key speed improvement)
+            // Show quick loading indicator
+            const popup = document.getElementById('playerPopup');
+            const overlay = document.getElementById('overlay');
+            popup.style.display = 'block';
+            overlay.style.display = 'block';
+            popup.innerHTML = `<div style="padding:40px;text-align:center;color:#00ffcc;">Loading player details...</div>`;
+
+            // Load game logs on demand
             await ensureGameLogsLoaded(sport);
 
             const popup = document.getElementById('playerPopup');
@@ -1625,9 +1654,9 @@
                             const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || 
                                              ((log.primaryPosition_name || '').toLowerCase().includes('pitch') === false && parseFloat(log.inningsPitched || log.IP || 0) === 0);
 
-                            // Skip pitcher games that have no IP (blank or "-")
+                            // Strict filter for pitchers: only include games where they actually pitched (IP > 0)
                             const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
-                            if (!isHitter && ipVal === 0) return;
+                            if (!isHitter && ipVal <= 0) return;
 
                             let col1 = isHitter 
                                 ? (log.atBats || log.AB || '-') 
