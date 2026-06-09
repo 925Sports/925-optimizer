@@ -581,26 +581,35 @@
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
             if (sport === 'mlb') {
-                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
-                                  s.includes('pitcher') || s.includes('ip') || s.includes('er') || 
-                                  s.includes('strikeout') || s.includes('earned run');
+                // Determine if this stat is for a pitcher (use both position in log + stat name)
+                const isPitcherStat = s.includes('pitcher') || s.includes('ip') || s.includes('er') || 
+                                      s.includes('strikeout') || s.includes('earned run') || s.includes('innings');
+                const isHitterFantasy = s.includes('hitter fantasy');
+                const isPitcherFantasy = s.includes('pitcher fantasy');
+                const isFantasyScore = s.includes('fantasy score');
 
-                if (isPitcher) {
+                const isPitcher = (log.position || '').toUpperCase().includes('P') || isPitcherStat || isPitcherFantasy;
+
+                if (isPitcher || isPitcherFantasy) {
                     if (s.includes('innings') || s.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (s.includes('earned') || s.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
                     if (s.includes('strikeout') || s.includes('k') || s.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (s.includes('walk') || s.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (isFantasyScore || isPitcherFantasy) {
+                        return calculateFantasyScore(log, sport);
+                    }
                     if (s.includes('h+r+rbi') || s.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                 } else {
-                    // Hitter logic
+                    // Hitter logic (including Hitter Fantasy Score)
                     if (s.includes('hit') && !s.includes('hit by')) return parseFloat(log.hits || log.H || 0);
                     if (s.includes('home run') || s.includes('hr')) return parseFloat(log.homeRuns || log.HR || 0);
                     if (s.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
                     if (s.includes('run') && !s.includes('rbi')) return parseFloat(log.runs || log.R || 0);
                     if (s.includes('ab') || s.includes('at bat')) return parseFloat(log.atBats || log.AB || 0);
-                    if (s.includes('fantasy')) return parseFloat(log.fantasyPoints || log.FP || 0);
+                    if (isFantasyScore || isHitterFantasy) {
+                        return calculateFantasyScore(log, sport);
+                    }
                     if (s.includes('h+r+rbi') || s.includes('hrrbi') || s.includes('hits+runs+rbis')) {
                         return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                     }
@@ -1076,11 +1085,6 @@
             if (oddsType === 'demon') iconHTML = '<div class="icon">👿</div>';
             if (oddsType === 'goblin') iconHTML = '<div class="icon">👺</div>';
 
-            let sportBadge = '';
-            if (sport === 'nba') sportBadge = '<div class="sport-badge nba" style="background:#7c3aed;color:white;">NBA</div>';
-            else if (sport === 'wnba') sportBadge = '<div class="sport-badge wnba" style="background:#f97316;color:white;">WNBA</div>';
-            else if (sport === 'mlb') sportBadge = '<div class="sport-badge mlb" style="background:#22c55e;color:white;">MLB</div>';
-
             let headshotRingClass = '';
             if (sport === 'nba') headshotRingClass = 'nba';
             else if (sport === 'wnba') headshotRingClass = 'wnba';
@@ -1099,7 +1103,6 @@
             const dividerClass = betTagLower.includes('more') || betTagLower.includes('over') ? 'more' : (betTagLower.includes('less') || betTagLower.includes('under') ? 'less' : '');
 
             card.innerHTML = `
-                ${sportBadge}
                 ${iconHTML}
                 <div class="header">
                     <span class="pop">${edge}</span>
