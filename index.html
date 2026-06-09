@@ -966,8 +966,12 @@
                 clearBtn.onclick = () => {
                     if (selectedBets.length > 0 && confirm(`Clear all ${selectedBets.length} selected bets?`)) {
                         selectedBets = [];
-                        renderContent();
-                        // Update header count if exists
+                        // Properly re-render whether on All tab or specific sport
+                        if (typeof currentSport !== 'undefined' && currentSport === 'all') {
+                            renderAllView();
+                        } else {
+                            renderContent();
+                        }
                         const headerCount = document.getElementById('betSlipCountHeader');
                         if (headerCount) headerCount.textContent = '(0)';
                     }
@@ -1344,12 +1348,13 @@
                 return;
             }
 
+            // Subtle, non-distracting summary text placed above cards but below stat type tabs
             const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto 12px; padding:8px 24px; color:#888; font-size:13px; background:#111; border-radius:8px;';
+            header.style.cssText = 'max-width:1400px; margin:2px auto 10px; padding:2px 24px; color:#666; font-size:11.5px; opacity:0.75;';
             const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                              (selectedOddsType === 'demon' ? 'Demon' : 
                              (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;•&nbsp; <span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
             contentDiv.appendChild(header);
 
             // Append cards in a grid container for consistent formatting with other tabs
