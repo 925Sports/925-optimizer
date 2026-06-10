@@ -803,7 +803,7 @@
                     const remoteUrl = (sport === 'mlb') 
                         ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/refs/heads/main/mlb_2026_season_game_logs.csv'
                         : (sport === 'nba' 
-                            ? './data/nba_game_logs.csv' 
+                            ? 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR-ZvShRlEWJen3PKivCQF79zYZJkW04F00THnwUrD_xUPvq609FWXZaD6sf4SPJ9rBvTzzrusA8a3N/pub?gid=0&single=true&output=csv' 
                             : './data/wnba_game_logs.csv');
                     if (remoteUrl) {
                         const remoteRes = await fetch(remoteUrl);
