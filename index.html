@@ -897,18 +897,10 @@
 
         function buildStatTabs() {
             tabsDiv.innerHTML = '';
-            // Show stat type tabs on All tab as well (user request for better usability)
+            if (currentSport === 'all') return;
 
-            let data = [];
-            if (currentSport === 'all') {
-                // Aggregate stat types from all sports for All tab
-                ['nba', 'wnba', 'mlb'].forEach(s => {
-                    if (dataStore[s]) data = data.concat(dataStore[s].allData || []);
-                });
-            } else {
-                const store = dataStore[currentSport];
-                data = store ? store.allData || [] : [];
-            }
+            const store = dataStore[currentSport];
+            const data = store.allData || [];
             let statTypes = [...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
 
             // Limit to most common for cleanliness
@@ -1354,42 +1346,45 @@
                         tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
 
-                        // Always calculate L5/L20 on the fly for maximum reliability (fixes MLB)
-                        const normPlayer = normalizeName(row['Player Name'] || '');
-                        const logs = (dataStore[currentSport]?.gameLogs || []).filter(l => 
-                            normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
-                        ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+                        // L5 / L20 values - calculate on the fly if pre-computed values are missing (robust for MLB + all sports)
+                        let l5Avg = row._l5AvgTable || '-';
+                        let l5Hit = row._l5HitTable || '-';
+                        let l20Avg = row._l20AvgTable || '-';
+                        let l20Hit = row._l20HitTable || '-';
 
-                        const line = parseFloat(row['Line Score'] || row.Line || 0);
-                        const betTag = (row['Bet Tag'] || '').toLowerCase();
-                        const isMore = betTag.includes('more') || betTag.includes('over');
+                        if (l5Avg === '-' || l20Avg === '-') {
+                            const normPlayer = normalizeName(row['Player Name'] || '');
+                            const logs = (dataStore[currentSport]?.gameLogs || []).filter(l => 
+                                normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
+                            ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
-                        let l5Avg = '-';
-                        let l5Hit = '-';
-                        const last5 = logs.slice(0, 5);
-                        if (last5.length > 0) {
-                            let sum = 0, hits = 0;
-                            last5.forEach(log => {
-                                const val = getStatValue(log, row['Stat Type'] || '', currentSport);
-                                sum += val;
-                                if (isMore ? val > line : val < line) hits++;
-                            });
-                            l5Avg = (sum / last5.length).toFixed(1);
-                            l5Hit = ((hits / last5.length) * 100).toFixed(0);
-                        }
+                            const line = parseFloat(row['Line Score'] || row.Line || 0);
+                            const betTag = (row['Bet Tag'] || '').toLowerCase();
+                            const isMore = betTag.includes('more') || betTag.includes('over');
 
-                        let l20Avg = '-';
-                        let l20Hit = '-';
-                        const last20 = logs.slice(0, 20);
-                        if (last20.length > 0) {
-                            let sum = 0, hits = 0;
-                            last20.forEach(log => {
-                                const val = getStatValue(log, row['Stat Type'] || '', currentSport);
-                                sum += val;
-                                if (isMore ? val > line : val < line) hits++;
-                            });
-                            l20Avg = (sum / last20.length).toFixed(1);
-                            l20Hit = ((hits / last20.length) * 100).toFixed(0);
+                            const last5 = logs.slice(0, 5);
+                            if (last5.length > 0) {
+                                let sum = 0, hits = 0;
+                                last5.forEach(log => {
+                                    const val = getStatValue(log, row['Stat Type'] || '', currentSport);
+                                    sum += val;
+                                    if (isMore ? val > line : val < line) hits++;
+                                });
+                                l5Avg = (sum / last5.length).toFixed(1);
+                                l5Hit = ((hits / last5.length) * 100).toFixed(0);
+                            }
+
+                            const last20 = logs.slice(0, 20);
+                            if (last20.length > 0) {
+                                let sum = 0, hits = 0;
+                                last20.forEach(log => {
+                                    const val = getStatValue(log, row['Stat Type'] || '', currentSport);
+                                    sum += val;
+                                    if (isMore ? val > line : val < line) hits++;
+                                });
+                                l20Avg = (sum / last20.length).toFixed(1);
+                                l20Hit = ((hits / last20.length) * 100).toFixed(0);
+                            }
                         }
 
                         // L5 Avg
@@ -1773,25 +1768,25 @@
                 contentDiv.appendChild(table);
             } else {
                 // Default: Card view for All tab
-                // Show status next to Clear Bets button instead of above cards
-                const clearBetsBtn = document.getElementById('clearBetsBtn');
-                const oldStatus = document.getElementById('allTabStatus');
-                if (oldStatus) oldStatus.remove();
-
-                if (clearBetsBtn && clearBetsBtn.parentNode) {
-                    const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
-                                     (selectedOddsType === 'demon' ? 'Demon' : 
-                                     (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-
-                    const status = document.createElement('div');
-                    status.id = 'allTabStatus';
-                    status.style.cssText = 'color:#888; font-size:11px; text-align:right; line-height:1.25; margin-left:12px; white-space:nowrap;';
-                    status.innerHTML = `
-                        Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB<br>
-                        <span style="color:#666;">Click any card for details • Bets added to shared slip</span>
-                    `;
-                    clearBetsBtn.parentNode.insertBefore(status, clearBetsBtn.nextSibling);
-                }
+                const header = document.createElement('div');
+                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:20px;';
+                
+                const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
+                                 (selectedOddsType === 'demon' ? 'Demon' : 
+                                 (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
+                
+                const leftText = document.createElement('div');
+                leftText.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB`;
+                
+                // Right side text - positioned to the right of Clear Bets area
+                const rightText = document.createElement('div');
+                rightText.style.color = '#555';
+                rightText.style.textAlign = 'right';
+                rightText.innerHTML = `Click any card for details • Bets added to shared slip`;
+                
+                header.appendChild(leftText);
+                header.appendChild(rightText);
+                contentDiv.appendChild(header);
 
                 allRows.slice(0, 300).forEach((row, idx) => {
                     const card = createPlayerCard(row, idx, row._sport);
