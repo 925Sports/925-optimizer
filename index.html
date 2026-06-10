@@ -1515,16 +1515,20 @@
             const statType = row['Stat Type'] || '';
             const edgeVal = parseFloat(row['Edge %'] || 0).toFixed(1);
 
+            // Build header HTML safely to avoid template literal parsing issues
+            let betTagHTML = '';
+            if (betTag) {
+                const btLower = betTag.toLowerCase();
+                const isOverTag = btLower.includes('over') || btLower.includes('more') || btLower.includes('↑');
+                const bgColor = isOverTag ? '#22c55e' : '#ef4444';
+                betTagHTML = `<span style="font-size:12px; background:${bgColor}; color:#000; padding:2px 8px; border-radius:6px; font-weight:600;">${betTag}</span>`;
+            }
+
             document.getElementById('popupName').innerHTML = `
                 <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                     <span>${row['Player Name']}</span>
                     <span style="font-size:13px; color:#888;">${sport.toUpperCase()}</span>
-                    ${betTag ? (() => {
-                        const bt = betTag.toLowerCase();
-                        const isOver = bt.includes('over') || bt.includes('more') || bt.includes('↑');
-                        const bg = isOver ? '#22c55e' : '#ef4444';
-                        return `<span style="font-size:12px; background:${bg}; color:#000; padding:2px 8px; border-radius:6px; font-weight:600;">${betTag}</span>`;
-                    })() : ''}
+                    ${betTagHTML}
                 </div>
                 <div style="font-size:13px; color:#aaa; margin-top:4px;">
                     ${statType} &nbsp;•&nbsp; Line: <strong>${lineVal}</strong> &nbsp;•&nbsp; Edge: <strong style="color:#00ffcc">${edgeVal}%</strong>
@@ -1936,45 +1940,18 @@
 
                 setTimeout(() => {
                     const search = document.getElementById('gameLogSearch');
-                    if (search && table) {
-                        const updateAverages = () => {
-                            const visibleRows = Array.from(table.querySelectorAll('tbody tr:not(.averages-row)')).filter(tr => tr.style.display !== 'none');
-                            const avgRow = table.querySelector('.averages-row');
-                            if (!avgRow || visibleRows.length === 0) return;
-
-                            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-                            
-                            headers.forEach((h, idx) => {
-                                const cell = avgRow.cells[idx];
-                                if (!cell) return;
-
-                                if (idx === 0 || ['MATCH UP','GAME DATE','W/L','FG','3PM/A','FT'].includes(h)) {
-                                    if (idx === 0) cell.textContent = visibleRows.length < logs.length ? 'Averages (filtered)' : 'Averages';
-                                } else {
-                                    let sum = 0, count = 0;
-                                    visibleRows.forEach(row => {
-                                        const val = parseFloat(row.cells[idx]?.textContent) || 0;
-                                        if (!isNaN(val)) { sum += val; count++; }
-                                    });
-                                    cell.textContent = count > 0 ? (sum / count).toFixed(1) : '-';
-                                }
-                            });
-                        };
-
-                        const gameLogTable = document.getElementById('gameLogTable');
+                    const gameLogTableEl = document.getElementById('gameLogTable');
+                    if (search && gameLogTableEl) {
                         search.oninput = () => {
                             const val = search.value.toUpperCase();
-                            document.querySelectorAll('#gameLogTable tbody tr:not(.averages-row)').forEach(tr => {
+                            gameLogTableEl.querySelectorAll('tbody tr:not(.averages-row)').forEach(tr => {
                                 tr.style.display = tr.textContent.toUpperCase().includes(val) ? '' : 'none';
                             });
-                            if (gameLogTable) updateGameLogAverages(gameLogTable);
+                            updateGameLogAverages(gameLogTableEl);
                         };
-
-                        setTimeout(() => {
-                            if (gameLogTable) updateGameLogAverages(gameLogTable);
-                        }, 150);
+                        setTimeout(() => updateGameLogAverages(gameLogTableEl), 100);
                     }
-                }, 40);
+                }, 60);
 
             } else if (tab === 'Splits') {
                 if (sport === 'nba') {
@@ -2009,12 +1986,34 @@
                         return { date: d.slice(5), value: getStatValueForNBA(log, row['Stat Type'] || '') };
                     });
 
-                    // Categories (simplified but matching desired visual)
-                    const categories = [
-                        { label: 'L5', average: last5.reduce((a,b)=>a+b.value,0)/last5.length || 0, hitRate: 0 },
-                        { label: 'L10', average: recentLogs.slice(0,10).reduce((a,l)=>a + getStatValueForNBA(l, row['Stat Type']||''),0)/10 || 0, hitRate: 0 },
-                        { label: 'L20', average: recentLogs.slice(0,20).reduce((a,l)=>a + getStatValueForNBA(l, row['Stat Type']||''),0)/20 || 0, hitRate: 0 }
-                    ];
+                    // Categories matching desired image (vs Opp, L5/L10/L20, Away, Proj Min)
+                    const categories = [];
+                    const currentOpp = (row.Opp || row['Opp'] || '').toUpperCase();
+                    const oppLogs = recentLogs.filter(l => (l['MATCH UP'] || l.opponent || '').toUpperCase().includes(currentOpp));
+                    
+                    if (oppLogs.length > 0) {
+                        const oppAvg = oppLogs.reduce((a,l) => a + getStatValueForNBA(l, row['Stat Type']||''), 0) / oppLogs.length;
+                        let hits = oppLogs.filter(l => (getStatValueForNBA(l, row['Stat Type']||'') > line) === isMore).length;
+                        categories.push({ label: 'vs ' + (row.Opp || 'Opp'), average: oppAvg, hitRate: Math.round((hits / oppLogs.length) * 100) });
+                    }
+
+                    // L5, L10, L20
+                    [5,10,20].forEach(n => {
+                        const slice = recentLogs.slice(0, n);
+                        if (slice.length > 0) {
+                            const avg = slice.reduce((a,l) => a + getStatValueForNBA(l, row['Stat Type']||''), 0) / slice.length;
+                            let hits = slice.filter(l => (getStatValueForNBA(l, row['Stat Type']||'') > line) === isMore).length;
+                            categories.push({ label: `L${n}`, average: avg, hitRate: Math.round((hits / slice.length) * 100) });
+                        }
+                    });
+
+                    // Away / Home proxy
+                    const homeAwayLogs = recentLogs.filter(l => (l['MATCH UP'] || '').includes('@'));
+                    if (homeAwayLogs.length > 0) {
+                        const avg = homeAwayLogs.reduce((a,l) => a + getStatValueForNBA(l, row['Stat Type']||''), 0) / homeAwayLogs.length;
+                        let hits = homeAwayLogs.filter(l => (getStatValueForNBA(l, row['Stat Type']||'') > line) === isMore).length;
+                        categories.push({ label: 'Away', average: avg, hitRate: Math.round((hits / homeAwayLogs.length) * 100) });
+                    }
 
                     // Calculate hit rates for categories
                     categories.forEach(cat => {
@@ -2029,7 +2028,7 @@
 
                     const labels = last5.map(g => g.date).concat(categories.map(c => c.label));
                     const dataPoints = last5.map(g => g.value).concat(categories.map(c => c.average));
-                    const hitLabels = last5.map(() => '').concat(categories.map(c => c.hitRate + '%'));
+                    const hitLabels = last5.map(() => '').concat(categories.map(c => c.hitRate ? c.hitRate + '%' : ''));
 
                     const goodColor = 'rgba(34, 197, 94, 0.85)';
                     const badColor = 'rgba(239, 68, 68, 0.85)';
