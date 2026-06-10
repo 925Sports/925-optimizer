@@ -1346,28 +1346,70 @@
                         tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
 
+                        // L5 / L20 values (use pre-computed if available, otherwise calculate on the fly for MLB)
+                        let l5Avg = row._l5AvgTable || '-';
+                        let l5Hit = row._l5HitTable || '-';
+                        let l20Avg = row._l20AvgTable || '-';
+                        let l20Hit = row._l20HitTable || '-';
+
+                        if ((l5Avg === '-' || l20Avg === '-') && currentSport === 'mlb') {
+                            // On-the-fly calculation for MLB
+                            const normPlayer = normalizeName(row['Player Name'] || '');
+                            const playerLogs = (dataStore.mlb?.gameLogs || []).filter(l => 
+                                normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
+                            ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+
+                            const line = parseFloat(row['Line Score'] || row.Line || 0);
+                            const betTag = (row['Bet Tag'] || '').toLowerCase();
+                            const isMore = betTag.includes('more') || betTag.includes('over');
+
+                            const last5 = playerLogs.slice(0, 5);
+                            if (last5.length > 0) {
+                                let sum = 0, hits = 0;
+                                last5.forEach(log => {
+                                    const val = getStatValue(log, row['Stat Type'] || '', 'mlb');
+                                    sum += val;
+                                    if (isMore ? val > line : val < line) hits++;
+                                });
+                                l5Avg = (sum / last5.length).toFixed(1);
+                                l5Hit = ((hits / last5.length) * 100).toFixed(0);
+                            }
+
+                            const last20 = playerLogs.slice(0, 20);
+                            if (last20.length > 0) {
+                                let sum = 0, hits = 0;
+                                last20.forEach(log => {
+                                    const val = getStatValue(log, row['Stat Type'] || '', 'mlb');
+                                    sum += val;
+                                    if (isMore ? val > line : val < line) hits++;
+                                });
+                                l20Avg = (sum / last20.length).toFixed(1);
+                                l20Hit = ((hits / last20.length) * 100).toFixed(0);
+                            }
+                        }
+
                         // L5 Avg
                         const tdL5 = document.createElement('td');
                         tdL5.style.padding = '8px';
-                        tdL5.textContent = row._l5AvgTable || '-';
+                        tdL5.textContent = l5Avg;
                         tr.appendChild(tdL5);
 
                         // L5 Hit%
                         const tdL5Hit = document.createElement('td');
                         tdL5Hit.style.padding = '8px';
-                        tdL5Hit.textContent = row._l5HitTable ? row._l5HitTable + '%' : '-';
+                        tdL5Hit.textContent = l5Hit !== '-' ? l5Hit + '%' : '-';
                         tr.appendChild(tdL5Hit);
 
                         // L20 Avg
                         const tdL20 = document.createElement('td');
                         tdL20.style.padding = '8px';
-                        tdL20.textContent = row._l20AvgTable || '-';
+                        tdL20.textContent = l20Avg;
                         tr.appendChild(tdL20);
 
                         // L20 Hit%
                         const tdL20Hit = document.createElement('td');
                         tdL20Hit.style.padding = '8px';
-                        tdL20Hit.textContent = row._l20HitTable ? row._l20HitTable + '%' : '-';
+                        tdL20Hit.textContent = l20Hit !== '-' ? l20Hit + '%' : '-';
                         tr.appendChild(tdL20Hit);
 
                         // Actions
@@ -1728,11 +1770,21 @@
             } else {
                 // Default: Card view for All tab
                 const header = document.createElement('div');
-                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
+                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px; display:flex; justify-content:space-between; align-items:center;';
+                
                 const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                                  (selectedOddsType === 'demon' ? 'Demon' : 
                                  (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-                header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+                
+                const leftText = document.createElement('div');
+                leftText.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB`;
+                
+                const rightText = document.createElement('div');
+                rightText.style.color = '#555';
+                rightText.innerHTML = `Click any card for details • Bets added to shared slip`;
+                
+                header.appendChild(leftText);
+                header.appendChild(rightText);
                 contentDiv.appendChild(header);
 
                 allRows.slice(0, 300).forEach((row, idx) => {
