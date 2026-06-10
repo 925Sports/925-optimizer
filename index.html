@@ -897,10 +897,18 @@
 
         function buildStatTabs() {
             tabsDiv.innerHTML = '';
-            if (currentSport === 'all') return;
+            // Show stat type tabs on All tab as well (user request for better usability)
 
-            const store = dataStore[currentSport];
-            const data = store.allData || [];
+            let data = [];
+            if (currentSport === 'all') {
+                // Aggregate stat types from all sports for All tab
+                ['nba', 'wnba', 'mlb'].forEach(s => {
+                    if (dataStore[s]) data = data.concat(dataStore[s].allData || []);
+                });
+            } else {
+                const store = dataStore[currentSport];
+                data = store ? store.allData || [] : [];
+            }
             let statTypes = [...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
 
             // Limit to most common for cleanliness
