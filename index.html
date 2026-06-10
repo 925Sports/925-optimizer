@@ -932,14 +932,9 @@
                 }
             };
 
-            // View select (now works on All tab too - shows message for table)
+            // View select - now fully supports Table view on All tab
             viewSelect.onchange = () => {
                 if (currentSport === 'all') {
-                    if (viewSelect.value === 'table') {
-                        alert('Table view is only available when viewing a single sport (NBA, WNBA, or MLB).');
-                        viewSelect.value = 'cards';
-                        return;
-                    }
                     renderAllView();
                 } else {
                     dataStore[currentSport].currentView = viewSelect.value;
@@ -1486,19 +1481,104 @@
                 return;
             }
 
-            const header = document.createElement('div');
-            header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
-            const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
-                             (selectedOddsType === 'demon' ? 'Demon' : 
-                             (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-            header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
-            contentDiv.appendChild(header);
+            // Determine view mode for All tab
+            const isTableView = (document.getElementById('viewSelect')?.value === 'table');
 
-            // Append cards directly (same as NBA/WNBA/MLB tabs) for consistent formatting
-            allRows.slice(0, 300).forEach((row, idx) => {
-                const card = createPlayerCard(row, idx, row._sport);
-                contentDiv.appendChild(card);
-            });
+            if (isTableView) {
+                // Render Table View for All tab
+                contentDiv.classList.add('table-view');
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'L5 Avg', 'L5 Hit%', 'Actions'];
+                const headerRow = document.createElement('tr');
+                headers.forEach(h => {
+                    const th = document.createElement('th');
+                    th.textContent = h;
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+                allRows.slice(0, 400).forEach((row, idx) => {
+                    const tr = document.createElement('tr');
+                    const sportLabel = (row._sport || '').toUpperCase();
+
+                    // Sport
+                    const tdSport = document.createElement('td');
+                    tdSport.textContent = sportLabel;
+                    tdSport.setAttribute('data-label', 'Sport');
+                    tr.appendChild(tdSport);
+
+                    // Player + click to popup
+                    const tdPlayer = document.createElement('td');
+                    tdPlayer.innerHTML = `<strong style="color:#00ffcc; cursor:pointer;">${row['Player Name']}</strong>`;
+                    tdPlayer.setAttribute('data-label', 'Player');
+                    tdPlayer.onclick = () => showPlayerPopup(row, idx, row._sport);
+                    tr.appendChild(tdPlayer);
+
+                    // Stat
+                    const tdStat = document.createElement('td');
+                    tdStat.textContent = row['Stat Type'];
+                    tdStat.setAttribute('data-label', 'Stat');
+                    tr.appendChild(tdStat);
+
+                    // Line
+                    const tdLine = document.createElement('td');
+                    tdLine.textContent = row['Line Score'] || '-';
+                    tdLine.setAttribute('data-label', 'Line');
+                    tr.appendChild(tdLine);
+
+                    // Edge
+                    const tdEdge = document.createElement('td');
+                    const edgeVal = parseFloat(row['Edge %']) || 0;
+                    tdEdge.innerHTML = `<span style="color:#00ffcc; font-weight:600;">${edgeVal.toFixed(1)}%</span>`;
+                    tdEdge.setAttribute('data-label', 'Edge');
+                    tr.appendChild(tdEdge);
+
+                    // L5 Avg (if available)
+                    const tdL5 = document.createElement('td');
+                    tdL5.textContent = row.l5Avg || '-';
+                    tdL5.setAttribute('data-label', 'L5 Avg');
+                    tr.appendChild(tdL5);
+
+                    // L5 Hit%
+                    const tdHit = document.createElement('td');
+                    tdHit.textContent = row.l5HitRate ? row.l5HitRate + '%' : '-';
+                    tdHit.setAttribute('data-label', 'L5 Hit%');
+                    tr.appendChild(tdHit);
+
+                    // Actions (More/Less buttons)
+                    const tdActions = document.createElement('td');
+                    tdActions.setAttribute('data-label', 'Actions');
+                    const btnDiv = document.createElement('div');
+                    btnDiv.className = 'buttons';
+                    btnDiv.innerHTML = `
+                        <button class="button less" data-choice="Less">↓ Less</button>
+                        <button class="button more" data-choice="More">↑ More</button>
+                    `;
+                    tdActions.appendChild(btnDiv);
+                    tr.appendChild(tdActions);
+
+                    tbody.appendChild(tr);
+                });
+                table.appendChild(tbody);
+                contentDiv.appendChild(table);
+            } else {
+                // Default: Card view for All tab
+                const header = document.createElement('div');
+                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px;';
+                const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
+                                 (selectedOddsType === 'demon' ? 'Demon' : 
+                                 (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
+                header.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB &nbsp;&nbsp;<span style="color:#555">Click any card for details • Bets added to shared slip</span>`;
+                contentDiv.appendChild(header);
+
+                allRows.slice(0, 300).forEach((row, idx) => {
+                    const card = createPlayerCard(row, idx, row._sport);
+                    contentDiv.appendChild(card);
+                });
+            }
         }
 
         // ==================== PLAYER POPUP ====================
