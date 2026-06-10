@@ -1831,6 +1831,57 @@
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
                             </tr>`;
+                        } else if (sport === 'nba') {
+                            // Rich NBA Game Log with full columns + proper Opp from MATCH UP
+                            const headers = ['MATCH UP','GAME DATE','W/L','MIN','PTS','FG','FG%','3PM/A','3P%','FT','FT%','OREB','DREB','REB','AST','STL','BLK','TOV','PF','+/-','FP'];
+                            html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
+                            html += `<input type="text" id="gameLogSearch" placeholder="Search by Match Up..." style="width:100%;margin-bottom:6px;padding:6px 10px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;">`;
+                            html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:10.5px;"><thead><tr>`;
+                            headers.forEach(h => html += `<th style="padding:3px 2px;cursor:pointer;" data-column="${h}">${h}</th>`);
+                            html += `</tr></thead><tbody>`;
+
+                            logs.forEach(log => {
+                                const fg = `${log.FGM||0}/${log.FGA||0}`;
+                                const three = `${log['3PM']||log.threePointersMade||0}/${log['3PA']||0}`;
+                                const ft = `${log.FTM||0}/${log.FTA||0}`;
+                                const pm = log['Plus/Minus'] || log.plusMinus || 0;
+                                const matchUp = log['MATCH UP'] || log.MATCH_UP || log.opponent || log.Opp || log['Opp'] || '';
+                                html += `<tr>
+                                    <td data-label="MATCH UP">${matchUp}</td>
+                                    <td data-label="GAME DATE">${log['GAME DATE']||log.gameDate||''}</td>
+                                    <td data-label="W/L">${log['W/L']||log.WL||''}</td>
+                                    <td data-label="MIN">${log.MIN||log.min||'-'}</td>
+                                    <td data-label="PTS">${log.PTS||log.points||0}</td>
+                                    <td data-label="FG">${fg}</td>
+                                    <td data-label="FG%">${log['FG%']||log.FG_PCT||'-'}</td>
+                                    <td data-label="3PM/A">${three}</td>
+                                    <td data-label="3P%">${log['3P%']||log['3P_PCT']||'-'}</td>
+                                    <td data-label="FT">${ft}</td>
+                                    <td data-label="FT%">${log['FT%']||log.FT_PCT||'-'}</td>
+                                    <td data-label="OREB">${log.OREB||log.oreb||0}</td>
+                                    <td data-label="DREB">${log.DREB||log.dreb||0}</td>
+                                    <td data-label="REB">${log.REB||log.rebounds||0}</td>
+                                    <td data-label="AST">${log.AST||log.assists||0}</td>
+                                    <td data-label="STL">${log.STL||log.steals||0}</td>
+                                    <td data-label="BLK">${log.BLK||log.blocks||0}</td>
+                                    <td data-label="TOV">${log.TOV||log.turnovers||0}</td>
+                                    <td data-label="PF">${log.PF||log.fouls||0}</td>
+                                    <td data-label="+/-">${pm}</td>
+                                    <td data-label="FP" style="color:#00ffcc;font-weight:700">${calculateFantasyScore(log,'nba').toFixed(1)}</td>
+                                </tr>`;
+                            });
+
+                            // Averages row
+                            html += `<tr style="font-weight:700;background:#222;"><td data-label="MATCH UP">Averages</td>`;
+                            headers.slice(1).forEach(h => {
+                                if (['W/L','FG','3PM/A','FT'].includes(h)) html += `<td data-label="${h}">-</td>`;
+                                else {
+                                    let sum=0, cnt=0;
+                                    logs.forEach(l => { const v = parseFloat(l[h] || l[h.replace('/','_')] || 0); if(!isNaN(v)){sum+=v;cnt++;} });
+                                    html += `<td data-label="${h}">${cnt>0 ? (sum/cnt).toFixed(1) : '-'}</td>`;
+                                }
+                            });
+                            html += `</tr></tbody></table></div>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
                         }
