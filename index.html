@@ -1614,7 +1614,7 @@
                 <div class="stat-box"><div class="stat-label">Line</div><div class="stat-value">${row['Line Score'] || row.Line || '-'}</div></div>
                 <div class="stat-box"><div class="stat-label">L5 Avg</div><div class="stat-value">${l5Avg}</div></div>
                 <div class="stat-box"><div class="stat-label">L5 Hit</div><div class="stat-value">${l5HitPct ? l5HitPct + '%' : '-'}</div></div>
-                <div class="stat-box"><div class="stat-label">Opp</div><div class="stat-value">${row['Opportunities'] || row['Opp'] || row['opp'] || '-'}</div></div>
+                <div class="stat-box"><div class="stat-label">OPs</div><div class="stat-value">${row['MIN Avg'] || row['Opportunities'] || row['opp'] || '-'}</div></div>
             `;
 
             // Tabs
@@ -1649,6 +1649,44 @@
                     if (currentChart) { currentChart.destroy(); currentChart = null; }
                 };
             }
+        }
+
+        function updateGameLogAverages(table) {
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+
+            const visibleRows = Array.from(tbody.rows).filter(r => r.style.display !== 'none' && !r.classList.contains('averages-row'));
+            if (visibleRows.length === 0) return;
+
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+            const avgRow = tbody.querySelector('.averages-row') || tbody.rows[tbody.rows.length - 1];
+
+            if (!avgRow) return;
+
+            headers.forEach((header, colIndex) => {
+                const cell = avgRow.cells[colIndex];
+                if (!cell) return;
+
+                if (['MATCH UP', 'GAME DATE', 'W/L', 'FG', '3PM/A', 'FT', 'Summary'].includes(header)) {
+                    if (header === 'MATCH UP') cell.textContent = 'Filtered Avg';
+                    else cell.textContent = '-';
+                    return;
+                }
+
+                let sum = 0;
+                let count = 0;
+
+                visibleRows.forEach(row => {
+                    const val = parseFloat(row.cells[colIndex]?.textContent);
+                    if (!isNaN(val)) {
+                        sum += val;
+                        count++;
+                    }
+                });
+
+                cell.textContent = count > 0 ? (sum / count).toFixed(1) : '-';
+            });
         }
 
         function navigatePopup(delta) {
@@ -1918,15 +1956,18 @@
                             });
                         };
 
+                        const gameLogTable = document.getElementById('gameLogTable');
                         search.oninput = () => {
                             const val = search.value.toUpperCase();
                             document.querySelectorAll('#gameLogTable tbody tr:not(.averages-row)').forEach(tr => {
                                 tr.style.display = tr.textContent.toUpperCase().includes(val) ? '' : 'none';
                             });
-                            updateAverages();
+                            if (gameLogTable) updateGameLogAverages(gameLogTable);
                         };
 
-                        setTimeout(updateAverages, 150);
+                        setTimeout(() => {
+                            if (gameLogTable) updateGameLogAverages(gameLogTable);
+                        }, 150);
                     }
                 }, 40);
 
