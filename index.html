@@ -527,9 +527,9 @@
         // ==================== GLOBAL STATE ====================
         let currentSport = 'all';
         let dataStore = {
-            nba: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            wnba: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            mlb: { allData: [], gameLogs: [], selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
+            nba: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            wnba: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            mlb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
         };
         let selectedBets = []; // SHARED across all sports
         let currentFiltered = [];
@@ -817,6 +817,16 @@
             if (gameLogText) {
                 store.gameLogs = Papa.parse(gameLogText, { header: true, skipEmptyLines: true }).data;
                 console.log(`Loaded ${store.gameLogs.length} game logs for ${sport}`);
+
+                // Build fast lookup cache: normalized name -> array of logs
+                store.playerLogCache = new Map();
+                store.gameLogs.forEach(log => {
+                    const rawName = log.PLAYER || log['Player Name'] || log.fullName || log['fullName'] || '';
+                    const norm = normalizeName(rawName);
+                    if (!norm) return;
+                    if (!store.playerLogCache.has(norm)) store.playerLogCache.set(norm, []);
+                    store.playerLogCache.get(norm).push(log);
+                });
             }
         }
 
@@ -1084,6 +1094,7 @@
                         { label: 'Stat', key: null, sortable: false },
                         { label: 'Edge', key: 'Edge', sortable: true },
                         { label: 'Line', key: 'Line', sortable: true },
+                        { label: 'PP - UD', key: 'PPUD', sortable: true },
                         { label: 'L5 Avg', key: null, sortable: false },
                         { label: 'L5 Hit%', key: null, sortable: false },
                         { label: 'Actions', key: null, sortable: false }
@@ -1121,14 +1132,19 @@
 
                     const tbody = document.createElement('tbody');
 
-                    // Precompute L5 for table (lightweight, only for displayed rows)
+                    // Precompute L5 for table - FAST using cache
+                    const storeForCache = dataStore[currentSport];
                     filtered.forEach(row => {
                         const playerName = row['Player Name'];
                         const normPlayer = normalizeName(playerName);
-                        const playerLogs = (dataStore[currentSport].gameLogs || []).filter(log => 
-                            nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
-                        );
-                        playerLogs.sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                        let playerLogs = storeForCache.playerLogCache?.get(normPlayer) || [];
+                        if (playerLogs.length === 0 && storeForCache.gameLogs?.length) {
+                            // Fallback (should rarely happen)
+                            playerLogs = storeForCache.gameLogs.filter(log => 
+                                nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
+                            );
+                        }
+                        playerLogs = [...playerLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                         const last5 = playerLogs.slice(0, 5);
                         const line = parseFloat(row['Line Score'] || row.Line || 0);
                         const betTag = (row['Bet Tag'] || '').toLowerCase();
@@ -1167,6 +1183,16 @@
                         sortedFiltered.sort((a, b) => {
                             const aVal = parseFloat(a['Line Score'] || a.Line || 0);
                             const bVal = parseFloat(b['Line Score'] || b.Line || 0);
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'PPUD') {
+                        sortedFiltered.sort((a, b) => {
+                            const aPP = parseFloat(a['Line Score'] || a.Line || 0);
+                            const aUD = parseFloat(a['Underdog Line'] || 0);
+                            const bPP = parseFloat(b['Line Score'] || b.Line || 0);
+                            const bUD = parseFloat(b['Underdog Line'] || 0);
+                            const aVal = (aUD === 0 ? 0 : aPP - aUD);
+                            const bVal = (bUD === 0 ? 0 : bPP - bUD);
                             return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
                         });
                     }
@@ -1216,6 +1242,17 @@
                         tdLine.style.fontWeight = '600';
                         tdLine.textContent = row['Line Score'] || row.Line || '-';
                         tr.appendChild(tdLine);
+
+                        // PP - UD (PrizePicks Line Score - Underdog Line). 0 if UD empty.
+                        const tdPPUD = document.createElement('td');
+                        tdPPUD.style.padding = '8px';
+                        tdPPUD.style.fontWeight = '600';
+                        const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
+                        const udLineVal = parseFloat(row['Underdog Line'] || 0);
+                        const ppudDiff = (udLineVal === 0 ? 0 : (ppLineVal - udLineVal)).toFixed(1);
+                        tdPPUD.textContent = ppudDiff;
+                        tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
+                        tr.appendChild(tdPPUD);
 
                         // L5 Avg
                         const tdL5 = document.createElement('td');
