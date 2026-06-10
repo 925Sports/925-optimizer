@@ -344,8 +344,28 @@
             .controls { flex-direction: column; align-items: stretch; }
             #content { grid-template-columns: 1fr; padding: 12px; }
             .popup { width: 98%; top: 4%; }
-            #playerPopup { width: 98%; top: 40px; }
-            .stats-boxes { justify-content: flex-start; }
+            #playerPopup { 
+                width: 96%; 
+                top: 30px; 
+                padding: 8px;
+                max-height: 92vh;
+            }
+            #playerPopup .header {
+                padding: 6px;
+            }
+            #playerPopup .tab-content {
+                padding: 8px 4px;
+            }
+            .stats-boxes { justify-content: flex-start; gap: 4px; }
+            .stat-box {
+                min-width: 52px;
+                padding: 4px 6px;
+            }
+            /* Better touch targets for prev/next arrows on mobile */
+            #prevPlayer, #nextPlayer {
+                padding: 12px 16px;
+                font-size: 18px;
+            }
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -838,29 +858,28 @@
                 if (filterBtnEl) filterBtnEl.style.display = 'none';
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = 'none';
                 renderAllView();
-                return;
             } else {
                 if (filterBtnEl) filterBtnEl.style.display = '';
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = '';
-            }
-            const store = dataStore[currentSport];
-            if (!store || !store.allData.length) {
-                contentDiv.innerHTML = `<div class="loading">No ${currentSport.toUpperCase()} data loaded.</div>`;
-                return;
-            }
-            // Reset search & view for cleanliness
-            searchInput.value = store.searchTerm || '';
-            viewSelect.value = store.currentView;
-            selectedToggle.checked = store.showSelectedOnly;
+                const store = dataStore[currentSport];
+                if (!store || !store.allData.length) {
+                    contentDiv.innerHTML = `<div class="loading">No ${currentSport.toUpperCase()} data loaded.</div>`;
+                    return;
+                }
+                // Reset search & view for cleanliness
+                searchInput.value = store.searchTerm || '';
+                viewSelect.value = store.currentView;
+                selectedToggle.checked = store.showSelectedOnly;
 
-            // Rebuild stat type tabs
-            buildStatTabs();
+                // Rebuild stat type tabs
+                buildStatTabs();
 
-            // Re-attach control listeners (idempotent)
+                // Render
+                renderContent();
+            }
+
+            // Always attach listeners (safe to call multiple times)
             attachControlListeners();
-
-            // Render
-            renderContent();
         }
 
         function updateSportTabs() {
@@ -932,7 +951,7 @@
                 }
             };
 
-            // View select - now fully supports Table view on All tab
+            // View select - fully supports Table view on All tab
             viewSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
@@ -1098,20 +1117,42 @@
                         { label: 'Edge', key: 'Edge', sortable: true },
                         { label: 'Line', key: 'Line', sortable: true },
                         { label: 'PP - UD', key: 'PPUD', sortable: true },
-                        { label: 'L5 Avg', key: null, sortable: false },
-                        { label: 'L5 Hit%', key: null, sortable: false },
+                        { label: 'L5 Avg', key: 'L5Avg', sortable: true },
+                        { label: 'L5 Hit%', key: 'L5Hit', sortable: true },
+                        { label: 'L20 Avg', key: 'L20Avg', sortable: true },
+                        { label: 'L20 Hit%', key: 'L20Hit', sortable: true },
                         { label: 'Actions', key: null, sortable: false }
                     ];
 
                     headers.forEach(h => {
                         const th = document.createElement('th');
-                        th.textContent = h.label;
-                        th.style.padding = '10px 8px';
-                        th.style.background = '#222';
-                        th.style.color = '#ccc';
-                        th.style.borderBottom = '2px solid #333';
-                        th.style.position = 'sticky';
-                        th.style.top = '0';
+                        if (h.label === 'Edge') {
+                            th.innerHTML = `Edge <span class="edge-info-icon" style="cursor:pointer; color:#00ffcc; font-size:13px; margin-left:4px;">ℹ️</span>`;
+                            th.style.padding = '10px 8px';
+                            th.style.background = '#222';
+                            th.style.color = '#ccc';
+                            th.style.borderBottom = '2px solid #333';
+                            th.style.position = 'sticky';
+                            th.style.top = '0';
+
+                            setTimeout(() => {
+                                const infoIcon = th.querySelector('.edge-info-icon');
+                                if (infoIcon) {
+                                    infoIcon.onclick = (e) => {
+                                        e.stopImmediatePropagation();
+                                        showEdgeExplanationModal();
+                                    };
+                                }
+                            }, 0);
+                        } else {
+                            th.textContent = h.label;
+                            th.style.padding = '10px 8px';
+                            th.style.background = '#222';
+                            th.style.color = '#ccc';
+                            th.style.borderBottom = '2px solid #333';
+                            th.style.position = 'sticky';
+                            th.style.top = '0';
+                        }
                         if (h.sortable) {
                             th.style.cursor = 'pointer';
                             th.onclick = () => {
@@ -1155,6 +1196,9 @@
 
                         let l5Avg = '-';
                         let l5Hit = '-';
+                        let l20Avg = '-';
+                        let l20Hit = '-';
+
                         if (last5.length > 0) {
                             let sum = 0;
                             let hits = 0;
@@ -1170,8 +1214,29 @@
                             l5Avg = (sum / last5.length).toFixed(1);
                             l5Hit = ((hits / last5.length) * 100).toFixed(0);
                         }
+
+                        // L20 calculation
+                        const last20 = playerLogs.slice(0, 20);
+                        if (last20.length > 0) {
+                            let sum20 = 0;
+                            let hits20 = 0;
+                            last20.forEach(log => {
+                                const val = getStatValue(log, row['Stat Type'] || '', currentSport);
+                                sum20 += val;
+                                if (isMore) {
+                                    if (val > line) hits20++;
+                                } else {
+                                    if (val < line) hits20++;
+                                }
+                            });
+                            l20Avg = (sum20 / last20.length).toFixed(1);
+                            l20Hit = ((hits20 / last20.length) * 100).toFixed(0);
+                        }
+
                         row._l5AvgTable = l5Avg;
                         row._l5HitTable = l5Hit;
+                        row._l20AvgTable = l20Avg;
+                        row._l20HitTable = l20Hit;
                     });
 
                     // Apply sort if needed
@@ -1196,6 +1261,30 @@
                             const bUD = parseFloat(b['Underdog Line'] || 0);
                             const aVal = (aUD === 0 ? 0 : aPP - aUD);
                             const bVal = (bUD === 0 ? 0 : bPP - bUD);
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'L5Avg') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a._l5AvgTable) || 0;
+                            const bVal = parseFloat(b._l5AvgTable) || 0;
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'L5Hit') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a._l5HitTable) || 0;
+                            const bVal = parseFloat(b._l5HitTable) || 0;
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'L20Avg') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a._l20AvgTable) || 0;
+                            const bVal = parseFloat(b._l20AvgTable) || 0;
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'L20Hit') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a._l20HitTable) || 0;
+                            const bVal = parseFloat(b._l20HitTable) || 0;
                             return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
                         });
                     }
@@ -1268,6 +1357,18 @@
                         tdL5Hit.style.padding = '8px';
                         tdL5Hit.textContent = row._l5HitTable ? row._l5HitTable + '%' : '-';
                         tr.appendChild(tdL5Hit);
+
+                        // L20 Avg
+                        const tdL20 = document.createElement('td');
+                        tdL20.style.padding = '8px';
+                        tdL20.textContent = row._l20AvgTable || '-';
+                        tr.appendChild(tdL20);
+
+                        // L20 Hit%
+                        const tdL20Hit = document.createElement('td');
+                        tdL20Hit.style.padding = '8px';
+                        tdL20Hit.textContent = row._l20HitTable ? row._l20HitTable + '%' : '-';
+                        tr.appendChild(tdL20Hit);
 
                         // Actions
                         const tdActions = document.createElement('td');
@@ -1761,6 +1862,44 @@
                     if (currentChart) { currentChart.destroy(); currentChart = null; }
                 };
             }
+
+            // === Mobile Swipe Navigation (left/right between players) ===
+            // Only enhance on touch devices; desktop behavior unchanged
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                let touchStartX = 0;
+                let touchStartY = 0;
+
+                const handleTouchStart = (e) => {
+                    touchStartX = e.changedTouches[0].screenX;
+                    touchStartY = e.changedTouches[0].screenY;
+                };
+
+                const handleTouchEnd = (e) => {
+                    const touchEndX = e.changedTouches[0].screenX;
+                    const touchEndY = e.changedTouches[0].screenY;
+
+                    const diffX = touchStartX - touchEndX;
+                    const diffY = touchStartY - touchEndY;
+
+                    // Only trigger on horizontal swipe (ignore mostly vertical scrolls)
+                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 60) {
+                        if (diffX > 0) {
+                            // Swipe left → Next player
+                            if (currentRowIndex < currentFiltered.length - 1) {
+                                showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                            }
+                        } else {
+                            // Swipe right → Previous player
+                            if (currentRowIndex > 0) {
+                                showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
+                            }
+                        }
+                    }
+                };
+
+                popup.addEventListener('touchstart', handleTouchStart, { passive: true });
+                popup.addEventListener('touchend', handleTouchEnd, { passive: true });
+            }
         }
 
         function updateGameLogAverages(table) {
@@ -1812,6 +1951,61 @@
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentSport);
+        }
+
+        // ==================== EDGE EXPLANATION MODAL ====================
+        function showEdgeExplanationModal() {
+            const existing = document.getElementById('edgeExplanationModal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'edgeExplanationModal';
+            modal.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: #1a1a1a; color: #f0f0f0; padding: 24px; border-radius: 16px;
+                max-width: 620px; width: 92%; max-height: 85vh; overflow-y: auto;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 100; font-size: 14px; line-height: 1.5;
+            `;
+
+            modal.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="margin:0; color:#00ffcc;">How Edge % Works</h3>
+                    <span id="closeEdgeModal" style="cursor:pointer; font-size:24px; color:#888;">×</span>
+                </div>
+
+                <p>The <strong>Edge %</strong> displayed in this tool shows your estimated advantage on a prop bet.</p>
+
+                <p>It is calculated by comparing the PrizePicks line to sharp, no-vig market probabilities. The higher the Edge %, the more value the bet is expected to hold over time.</p>
+
+                <h4 style="color:#00ffcc; margin-top:20px;">What is "Vig"?</h4>
+                <p>Vig (short for vigorish) is the built-in commission sportsbooks charge on every bet. For example, a standard -110 line means you must risk $110 to win $100. This tax increases the implied probability and makes it harder to profit long-term.</p>
+
+                <p>By removing the vig, we get a cleaner estimate of the true probability. This allows us to more accurately identify which PrizePicks props actually offer value.</p>
+
+                <h4 style="color:#00ffcc; margin-top:20px;">Targeting +EV Bets on PrizePicks</h4>
+                <p><strong>+EV</strong> (Positive Expected Value) means that, over a large number of bets, you are expected to make money in the long run.</p>
+
+                <p><strong>We recommend prioritizing bets with an Edge of 54% or higher</strong>. These represent the strongest value opportunities on the current slate.</p>
+
+                <p>While bets with lower edges can still be useful (especially when building correlated parlays), starting with 54%+ Edge props gives you the highest probability of long-term profitability.</p>
+
+                <h4 style="color:#00ffcc; margin-top:20px;">How to Use This Tool</h4>
+                <ul style="padding-left:20px; margin:8px 0;">
+                    <li>Use the <strong>Table view</strong> to quickly scan and sort by Edge, L5 Avg, or L20 metrics.</li>
+                    <li>Click the <strong>info icon (ℹ️)</strong> on any player to open the detailed popup with game logs, splits, and matchup data.</li>
+                    <li>Focus first on props showing <strong>54%+ Edge</strong> for the best risk/reward.</li>
+                    <li>Pay attention to recent form (L5 and L20 splits) and how a player performs against the specific line.</li>
+                </ul>
+
+                <p style="margin-top:16px; font-size:13px; color:#aaa;">
+                    Consistently identifying and betting on +EV props is one of the most reliable ways to build an edge in prop betting and daily fantasy sports.
+                </p>
+            `;
+
+            document.body.appendChild(modal);
+
+            document.getElementById('closeEdgeModal').onclick = () => modal.remove();
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
         }
 
         function renderPopupContent(tab, row, sport) {
