@@ -1567,6 +1567,13 @@
                         const ou = parseFloat(gameOU);
                         let ouClass = (ou < 230) ? 'ou-red' : 'ou-green';
                         html += `<span>Game O/U: <strong class="${ouClass}">${gameOU}</strong></span>`;
+                    } else if (sport === 'wnba') {
+                        const ou = parseFloat(gameOU);
+                        let ouClass = '';
+                        if (ou <= 156) ouClass = 'ou-red';
+                        else if (ou >= 170) ouClass = 'ou-green';
+                        else ouClass = 'ou-yellow'; // middle range (157-169)
+                        html += `<span>Game O/U: <strong class="${ouClass}">${gameOU}</strong></span>`;
                     } else {
                         html += `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>`;
                     }
@@ -1578,7 +1585,7 @@
                         if (spread < 0) spreadClass = 'spread-green';
                         else if (Math.abs(spread) > 0.9) spreadClass = 'spread-red';
                         html += `<span>Point Spread: <strong class="${spreadClass}">${pointSpread}</strong></span>`;
-                    } else if (sport === 'nba') {
+                    } else if (sport === 'nba' || sport === 'wnba') {
                         const spread = parseFloat(pointSpread);
                         let spreadClass = (Math.abs(spread) >= 7) ? 'spread-red' : '';
                         html += `<span>Point Spread: <strong class="${spreadClass}">${pointSpread}</strong></span>`;
