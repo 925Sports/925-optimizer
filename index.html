@@ -220,6 +220,14 @@
             box-shadow: 0 0 0 2px #b91c1c;
             font-weight: 700;
         }
+        .green-outline {
+            outline: 2px solid #22c55e;
+            outline-offset: -2px;
+        }
+        .red-outline {
+            outline: 2px solid #ef4444;
+            outline-offset: -2px;
+        }
         .divider { position: absolute; top: 5px; bottom: 5px; left: 50%; width: 2px; background: #333; transform: translateX(-50%); z-index: 1; }
         .divider.more { background: #22c55e; }
         .divider.less { background: #ef4444; }
@@ -906,7 +914,7 @@
                 }
             };
 
-            // View select (Table view now properly supported on individual sports)
+            // View select (now works on All tab too - shows message for table)
             viewSelect.onchange = () => {
                 if (currentSport === 'all') {
                     if (viewSelect.value === 'table') {
@@ -1063,9 +1071,209 @@
                         contentDiv.appendChild(card);
                     });
                 } else {
-                    // Table view (simplified for brevity in this update - can be expanded)
+                    // Full Table view implementation
                     const table = document.createElement('table');
-                    // ... (table rendering logic can be added similarly to MLB code if needed)
+                    table.style.width = '100%';
+                    table.style.borderCollapse = 'collapse';
+                    table.style.fontSize = '13px';
+
+                    const thead = document.createElement('thead');
+                    const headerRow = document.createElement('tr');
+                    const headers = [
+                        { label: 'Player', key: null, sortable: false },
+                        { label: 'Stat', key: null, sortable: false },
+                        { label: 'Edge', key: 'Edge', sortable: true },
+                        { label: 'Line', key: 'Line', sortable: true },
+                        { label: 'L5 Avg', key: null, sortable: false },
+                        { label: 'L5 Hit%', key: null, sortable: false },
+                        { label: 'Actions', key: null, sortable: false }
+                    ];
+
+                    headers.forEach(h => {
+                        const th = document.createElement('th');
+                        th.textContent = h.label;
+                        th.style.padding = '10px 8px';
+                        th.style.background = '#222';
+                        th.style.color = '#ccc';
+                        th.style.borderBottom = '2px solid #333';
+                        th.style.position = 'sticky';
+                        th.style.top = '0';
+                        if (h.sortable) {
+                            th.style.cursor = 'pointer';
+                            th.onclick = () => {
+                                if (store.contentSortColumn === h.key) {
+                                    store.contentSortDirection = store.contentSortDirection === 'asc' ? 'desc' : 'asc';
+                                } else {
+                                    store.contentSortColumn = h.key;
+                                    store.contentSortDirection = h.key === 'Edge' ? 'desc' : 'asc';
+                                }
+                                renderContent();
+                            };
+                            if (store.contentSortColumn === h.key) {
+                                th.classList.add(store.contentSortDirection);
+                                th.style.color = '#00ffcc';
+                            }
+                        }
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+                    table.appendChild(thead);
+
+                    const tbody = document.createElement('tbody');
+
+                    // Precompute L5 for table (lightweight, only for displayed rows)
+                    filtered.forEach(row => {
+                        const playerName = row['Player Name'];
+                        const normPlayer = normalizeName(playerName);
+                        const playerLogs = (dataStore[currentSport].gameLogs || []).filter(log => 
+                            nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
+                        );
+                        playerLogs.sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                        const last5 = playerLogs.slice(0, 5);
+                        const line = parseFloat(row['Line Score'] || row.Line || 0);
+                        const betTag = (row['Bet Tag'] || '').toLowerCase();
+                        const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
+
+                        let l5Avg = '-';
+                        let l5Hit = '-';
+                        if (last5.length > 0) {
+                            let sum = 0;
+                            let hits = 0;
+                            last5.forEach(log => {
+                                const val = getStatValue(log, row['Stat Type'] || '', currentSport);
+                                sum += val;
+                                if (isMore) {
+                                    if (val > line) hits++;
+                                } else {
+                                    if (val < line) hits++;
+                                }
+                            });
+                            l5Avg = (sum / last5.length).toFixed(1);
+                            l5Hit = ((hits / last5.length) * 100).toFixed(0);
+                        }
+                        row._l5AvgTable = l5Avg;
+                        row._l5HitTable = l5Hit;
+                    });
+
+                    // Apply sort if needed
+                    let sortedFiltered = [...filtered];
+                    if (store.contentSortColumn === 'Edge') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a['Edge %'] || 0);
+                            const bVal = parseFloat(b['Edge %'] || 0);
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    } else if (store.contentSortColumn === 'Line') {
+                        sortedFiltered.sort((a, b) => {
+                            const aVal = parseFloat(a['Line Score'] || a.Line || 0);
+                            const bVal = parseFloat(b['Line Score'] || b.Line || 0);
+                            return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    }
+
+                    sortedFiltered.forEach((row, index) => {
+                        const tr = document.createElement('tr');
+                        tr.style.borderBottom = '1px solid #333';
+                        tr.style.cursor = 'pointer';
+
+                        // Player + sport badge
+                        const tdPlayer = document.createElement('td');
+                        tdPlayer.style.padding = '8px';
+                        tdPlayer.innerHTML = `
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <img src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/28?text=?'}" 
+                                     style="width:28px;height:28px;border-radius:50%;border:1px solid #444;" alt="">
+                                <div>
+                                    <div style="font-weight:600;color:#00ffcc;">${row['Player Name']}</div>
+                                    <div style="font-size:10px;color:#888;">${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}</div>
+                                </div>
+                            </div>
+                        `;
+                        tdPlayer.onclick = () => showPlayerPopup(row, index, currentSport);
+                        tr.appendChild(tdPlayer);
+
+                        // Stat
+                        const tdStat = document.createElement('td');
+                        tdStat.style.padding = '8px';
+                        tdStat.textContent = row['Stat Type'] || '';
+                        tr.appendChild(tdStat);
+
+                        // Edge
+                        const tdEdge = document.createElement('td');
+                        tdEdge.style.padding = '8px';
+                        tdEdge.style.fontWeight = '700';
+                        tdEdge.style.color = '#00ffcc';
+                        let icon = '';
+                        const ot = (row['Odds Type'] || '').toLowerCase();
+                        if (ot === 'demon') icon = '👿 ';
+                        if (ot === 'goblin') icon = '👺 ';
+                        tdEdge.textContent = icon + (parseFloat(row['Edge %'] || 0).toFixed(1) + '%');
+                        tr.appendChild(tdEdge);
+
+                        // Line
+                        const tdLine = document.createElement('td');
+                        tdLine.style.padding = '8px';
+                        tdLine.style.fontWeight = '600';
+                        tdLine.textContent = row['Line Score'] || row.Line || '-';
+                        tr.appendChild(tdLine);
+
+                        // L5 Avg
+                        const tdL5 = document.createElement('td');
+                        tdL5.style.padding = '8px';
+                        tdL5.textContent = row._l5AvgTable || '-';
+                        tr.appendChild(tdL5);
+
+                        // L5 Hit%
+                        const tdL5Hit = document.createElement('td');
+                        tdL5Hit.style.padding = '8px';
+                        tdL5Hit.textContent = row._l5HitTable ? row._l5HitTable + '%' : '-';
+                        tr.appendChild(tdL5Hit);
+
+                        // Actions
+                        const tdActions = document.createElement('td');
+                        tdActions.style.padding = '8px';
+                        const actionsDiv = document.createElement('div');
+                        actionsDiv.className = 'buttons';
+                        actionsDiv.style.margin = '0';
+                        actionsDiv.style.background = 'transparent';
+
+                        const key = `${row['Player Name']}-${row['Stat Type']}`;
+                        const selectedBet = selectedBets.find(b => b.key === key && b.sport === currentSport);
+                        let lessClass = 'button less';
+                        let moreClass = 'button more';
+                        if (selectedBet) {
+                            if (selectedBet.choice === 'Less') lessClass += ' selected selected-less';
+                            else moreClass += ' selected selected-more';
+                        } else {
+                            const bt = (row['Bet Tag'] || '').toLowerCase();
+                            if (bt.includes('over') || bt.includes('more') || bt.includes('↑')) moreClass += ' green-outline';
+                            if (bt.includes('under') || bt.includes('less') || bt.includes('↓')) lessClass += ' red-outline';
+                        }
+
+                        actionsDiv.innerHTML = `
+                            <button class="${lessClass}" data-choice="Less" style="padding:6px 14px;font-size:12px;">↓ Less</button>
+                            <button class="${moreClass}" data-choice="More" style="padding:6px 14px;font-size:12px;">↑ More</button>
+                        `;
+
+                        const lessBtn = actionsDiv.querySelector('.button.less');
+                        const moreBtn = actionsDiv.querySelector('.button.more');
+
+                        lessBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'Less', currentSport);
+                        };
+                        moreBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'More', currentSport);
+                        };
+
+                        tdActions.appendChild(actionsDiv);
+                        tr.appendChild(tdActions);
+
+                        tbody.appendChild(tr);
+                    });
+
+                    table.appendChild(tbody);
                     contentDiv.appendChild(table);
                 }
             }, 50);
@@ -1585,29 +1793,6 @@
                                 <td>${bb}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
-                            </tr>`;
-                        } else if (sport === 'nba') {
-                            // NBA Game Log row (modeled after the clean NBA code)
-                            const min = log.MIN || log.minutes || '-';
-                            const pts = log.PTS || log.points || 0;
-                            const reb = log.REB || log.rebounds || 0;
-                            const ast = log.AST || log.assists || 0;
-                            const threePM = log['3PM'] || log.threePointersMade || 0;
-                            const fgm = log.FGM || 0;
-                            const fga = log.FGA || 0;
-                            const ftm = log.FTM || 0;
-                            const fta = log.FTA || 0;
-                            html += `<tr>
-                                <td>${date}</td>
-                                <td>${opp}</td>
-                                <td>${min}</td>
-                                <td>${pts}</td>
-                                <td>${reb}</td>
-                                <td>${ast}</td>
-                                <td>${threePM}</td>
-                                <td>${fgm}/${fga}</td>
-                                <td>${ftm}/${fta}</td>
-                                <td style="color:#00ffcc;font-weight:700">${fp}</td>
                             </tr>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
