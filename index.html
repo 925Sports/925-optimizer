@@ -1982,8 +1982,25 @@
 
                     // Last 5 games for chart
                     const last5 = recentLogs.slice(0, 5).map(log => {
-                        const d = log['GAME DATE'] || log.gameDate || log.date || '';
-                        return { date: d.slice(5), value: getStatValueForNBA(log, row['Stat Type'] || '') };
+                        const rawDate = log['GAME DATE'] || log.gameDate || log.date || '';
+                        let formattedDate = '';
+                        if (rawDate) {
+                            // Handle common formats: "6/8/2026", "2026-06-08", "Jun 8, 2026"
+                            const parts = rawDate.split(/[-/,\s]+/);
+                            if (parts.length >= 2) {
+                                let month = parts[0];
+                                let day = parts[1];
+                                // If first part is year (2026), shift
+                                if (month.length === 4) {
+                                    month = parts[1];
+                                    day = parts[2];
+                                }
+                                formattedDate = `${parseInt(month)}/${parseInt(day)}`;
+                            } else {
+                                formattedDate = rawDate.slice(5); // fallback
+                            }
+                        }
+                        return { date: formattedDate || 'N/A', value: getStatValueForNBA(log, row['Stat Type'] || '') };
                     });
 
                     // Categories matching desired image (vs Opp, L5/L10/L20, Away, Proj Min)
