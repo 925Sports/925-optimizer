@@ -1590,7 +1590,7 @@
                 contentDiv.classList.add('table-view');
                 const table = document.createElement('table');
                 const thead = document.createElement('thead');
-                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'L5 Avg', 'L5 Hit%', 'Actions'];
+                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'PP-UD', 'L5 Avg', 'L5 Hit%', 'L20 Avg', 'L20 Hit%', 'Actions'];
                 const headerRow = document.createElement('tr');
                 headers.forEach(h => {
                     const th = document.createElement('th');
@@ -1637,17 +1637,77 @@
                     tdEdge.setAttribute('data-label', 'Edge');
                     tr.appendChild(tdEdge);
 
-                    // L5 Avg (if available)
+                    // PP - UD
+                    const tdPPUD = document.createElement('td');
+                    const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
+                    const udLine = parseFloat(row['Underdog Line'] || 0);
+                    const ppudDiff = (udLine === 0 ? 0 : (ppLine - udLine)).toFixed(1);
+                    tdPPUD.textContent = ppudDiff;
+                    tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
+                    tdPPUD.setAttribute('data-label', 'PP-UD');
+                    tr.appendChild(tdPPUD);
+
+                    // Calculate L5 and L20 on the fly for All tab
+                    const normPlayer = normalizeName(row['Player Name'] || '');
+                    const playerLogs = (dataStore[row._sport]?.gameLogs || []).filter(l => 
+                        normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
+                    ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+
+                    const line = parseFloat(row['Line Score'] || row.Line || 0);
+                    const betTag = (row['Bet Tag'] || '').toLowerCase();
+                    const isMore = betTag.includes('more') || betTag.includes('over');
+
+                    // L5
+                    const last5 = playerLogs.slice(0, 5);
+                    let l5Avg = '-', l5Hit = '-';
+                    if (last5.length > 0) {
+                        let sum = 0, hits = 0;
+                        last5.forEach(log => {
+                            const val = getStatValue(log, row['Stat Type'] || '', row._sport);
+                            sum += val;
+                            if (isMore ? val > line : val < line) hits++;
+                        });
+                        l5Avg = (sum / last5.length).toFixed(1);
+                        l5Hit = ((hits / last5.length) * 100).toFixed(0);
+                    }
+
+                    // L20
+                    const last20 = playerLogs.slice(0, 20);
+                    let l20Avg = '-', l20Hit = '-';
+                    if (last20.length > 0) {
+                        let sum = 0, hits = 0;
+                        last20.forEach(log => {
+                            const val = getStatValue(log, row['Stat Type'] || '', row._sport);
+                            sum += val;
+                            if (isMore ? val > line : val < line) hits++;
+                        });
+                        l20Avg = (sum / last20.length).toFixed(1);
+                        l20Hit = ((hits / last20.length) * 100).toFixed(0);
+                    }
+
+                    // L5 Avg
                     const tdL5 = document.createElement('td');
-                    tdL5.textContent = row.l5Avg || '-';
+                    tdL5.textContent = l5Avg;
                     tdL5.setAttribute('data-label', 'L5 Avg');
                     tr.appendChild(tdL5);
 
                     // L5 Hit%
-                    const tdHit = document.createElement('td');
-                    tdHit.textContent = row.l5HitRate ? row.l5HitRate + '%' : '-';
-                    tdHit.setAttribute('data-label', 'L5 Hit%');
-                    tr.appendChild(tdHit);
+                    const tdL5Hit = document.createElement('td');
+                    tdL5Hit.textContent = l5Hit !== '-' ? l5Hit + '%' : '-';
+                    tdL5Hit.setAttribute('data-label', 'L5 Hit%');
+                    tr.appendChild(tdL5Hit);
+
+                    // L20 Avg
+                    const tdL20 = document.createElement('td');
+                    tdL20.textContent = l20Avg;
+                    tdL20.setAttribute('data-label', 'L20 Avg');
+                    tr.appendChild(tdL20);
+
+                    // L20 Hit%
+                    const tdL20Hit = document.createElement('td');
+                    tdL20Hit.textContent = l20Hit !== '-' ? l20Hit + '%' : '-';
+                    tdL20Hit.setAttribute('data-label', 'L20 Hit%');
+                    tr.appendChild(tdL20Hit);
 
                     // Actions (More/Less buttons)
                     const tdActions = document.createElement('td');
