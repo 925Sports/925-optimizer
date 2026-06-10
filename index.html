@@ -1346,16 +1346,15 @@
                         tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
 
-                        // L5 / L20 values (use pre-computed if available, otherwise calculate on the fly for MLB)
+                        // L5 / L20 values - calculate on the fly if pre-computed values are missing (robust for MLB + all sports)
                         let l5Avg = row._l5AvgTable || '-';
                         let l5Hit = row._l5HitTable || '-';
                         let l20Avg = row._l20AvgTable || '-';
                         let l20Hit = row._l20HitTable || '-';
 
-                        if ((l5Avg === '-' || l20Avg === '-') && currentSport === 'mlb') {
-                            // On-the-fly calculation for MLB
+                        if (l5Avg === '-' || l20Avg === '-') {
                             const normPlayer = normalizeName(row['Player Name'] || '');
-                            const playerLogs = (dataStore.mlb?.gameLogs || []).filter(l => 
+                            const logs = (dataStore[currentSport]?.gameLogs || []).filter(l => 
                                 normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
                             ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
@@ -1363,11 +1362,11 @@
                             const betTag = (row['Bet Tag'] || '').toLowerCase();
                             const isMore = betTag.includes('more') || betTag.includes('over');
 
-                            const last5 = playerLogs.slice(0, 5);
+                            const last5 = logs.slice(0, 5);
                             if (last5.length > 0) {
                                 let sum = 0, hits = 0;
                                 last5.forEach(log => {
-                                    const val = getStatValue(log, row['Stat Type'] || '', 'mlb');
+                                    const val = getStatValue(log, row['Stat Type'] || '', currentSport);
                                     sum += val;
                                     if (isMore ? val > line : val < line) hits++;
                                 });
@@ -1375,11 +1374,11 @@
                                 l5Hit = ((hits / last5.length) * 100).toFixed(0);
                             }
 
-                            const last20 = playerLogs.slice(0, 20);
+                            const last20 = logs.slice(0, 20);
                             if (last20.length > 0) {
                                 let sum = 0, hits = 0;
                                 last20.forEach(log => {
-                                    const val = getStatValue(log, row['Stat Type'] || '', 'mlb');
+                                    const val = getStatValue(log, row['Stat Type'] || '', currentSport);
                                     sum += val;
                                     if (isMore ? val > line : val < line) hits++;
                                 });
@@ -1770,7 +1769,7 @@
             } else {
                 // Default: Card view for All tab
                 const header = document.createElement('div');
-                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px; display:flex; justify-content:space-between; align-items:center;';
+                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:20px;';
                 
                 const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
                                  (selectedOddsType === 'demon' ? 'Demon' : 
@@ -1779,8 +1778,10 @@
                 const leftText = document.createElement('div');
                 leftText.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB`;
                 
+                // Right side text - positioned to the right of Clear Bets area
                 const rightText = document.createElement('div');
                 rightText.style.color = '#555';
+                rightText.style.textAlign = 'right';
                 rightText.innerHTML = `Click any card for details • Bets added to shared slip`;
                 
                 header.appendChild(leftText);
