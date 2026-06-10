@@ -831,9 +831,17 @@
         }
 
         function initCurrentSport() {
+            // Hide advanced filters on "All" tab for better UX (customer-facing)
+            const filterBtnEl = document.getElementById('filterBtn');
+            const calloutFilterBtnEl = document.getElementById('calloutFilterBtn');
             if (currentSport === 'all') {
+                if (filterBtnEl) filterBtnEl.style.display = 'none';
+                if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = 'none';
                 renderAllView();
                 return;
+            } else {
+                if (filterBtnEl) filterBtnEl.style.display = '';
+                if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = '';
             }
             const store = dataStore[currentSport];
             if (!store || !store.allData.length) {
