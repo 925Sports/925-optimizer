@@ -1903,7 +1903,134 @@
                 }, 40);
 
             } else if (tab === 'Splits') {
-                if (sport === 'mlb') {
+                if (sport === 'nba') {
+                    // ========== FULL RICH NBA SPLITS CHART (matching your original NBA tool + desired image) ==========
+                    let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    playerLogs.sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || b.date || 0) - new Date(a['GAME DATE'] || a.gameDate || a.date || 0));
+                    const recentLogs = playerLogs.slice(0, 20);
+
+                    const line = parseFloat(row['Line Score'] || row.Line || 0);
+                    const betTag = (row['Bet Tag'] || '').toLowerCase();
+                    const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
+
+                    const getStatValueForNBA = (log, statType) => {
+                        const s = statType.toLowerCase();
+                        if (s.includes('point') && !s.includes('+')) return parseFloat(log.PTS || log.points || 0);
+                        if (s.includes('rebound') && !s.includes('+')) return parseFloat(log.REB || log.rebounds || 0);
+                        if (s.includes('assist') && !s.includes('+')) return parseFloat(log.AST || log.assists || 0);
+                        if (s.includes('3-pt') || s.includes('3pm')) return parseFloat(log['3PM'] || log.threePointersMade || log['3sPM'] || 0);
+                        if (s.includes('pts+rebs+asts') || s.includes('pra')) return (parseFloat(log.PTS||0) + parseFloat(log.REB||0) + parseFloat(log.AST||0));
+                        if (s.includes('pts+rebs')) return (parseFloat(log.PTS||0) + parseFloat(log.REB||0));
+                        if (s.includes('pts+asts')) return (parseFloat(log.PTS||0) + parseFloat(log.AST||0));
+                        if (s.includes('rebs+asts')) return (parseFloat(log.REB||0) + parseFloat(log.AST||0));
+                        if (s.includes('fantasy') || s.includes('fp')) {
+                            return parseFloat(log.PTS||0) + parseFloat(log.REB||0)*1.2 + parseFloat(log.AST||0)*1.5 + parseFloat(log.STL||0)*3 + parseFloat(log.BLK||0)*3 - parseFloat(log.TOV||0);
+                        }
+                        return parseFloat(log[statType.toUpperCase()] || log[statType] || 0) || 0;
+                    };
+
+                    // Last 5 games for chart
+                    const last5 = recentLogs.slice(0, 5).map(log => {
+                        const d = log['GAME DATE'] || log.gameDate || log.date || '';
+                        return { date: d.slice(5), value: getStatValueForNBA(log, row['Stat Type'] || '') };
+                    });
+
+                    // Categories (simplified but matching desired visual)
+                    const categories = [
+                        { label: 'L5', average: last5.reduce((a,b)=>a+b.value,0)/last5.length || 0, hitRate: 0 },
+                        { label: 'L10', average: recentLogs.slice(0,10).reduce((a,l)=>a + getStatValueForNBA(l, row['Stat Type']||''),0)/10 || 0, hitRate: 0 },
+                        { label: 'L20', average: recentLogs.slice(0,20).reduce((a,l)=>a + getStatValueForNBA(l, row['Stat Type']||''),0)/20 || 0, hitRate: 0 }
+                    ];
+
+                    // Calculate hit rates for categories
+                    categories.forEach(cat => {
+                        let hits = 0;
+                        const logsToCheck = cat.label === 'L5' ? recentLogs.slice(0,5) : (cat.label === 'L10' ? recentLogs.slice(0,10) : recentLogs.slice(0,20));
+                        logsToCheck.forEach(log => {
+                            const val = getStatValueForNBA(log, row['Stat Type'] || '');
+                            if (isMore ? val > line : val < line) hits++;
+                        });
+                        cat.hitRate = logsToCheck.length > 0 ? Math.round((hits / logsToCheck.length) * 100) : 0;
+                    });
+
+                    const labels = last5.map(g => g.date).concat(categories.map(c => c.label));
+                    const dataPoints = last5.map(g => g.value).concat(categories.map(c => c.average));
+                    const hitLabels = last5.map(() => '').concat(categories.map(c => c.hitRate + '%'));
+
+                    const goodColor = 'rgba(34, 197, 94, 0.85)';
+                    const badColor = 'rgba(239, 68, 68, 0.85)';
+                    const colors = last5.map(g => (isMore ? g.value > line : g.value < line) ? goodColor : badColor)
+                        .concat(categories.map(c => (isMore ? c.average > line : c.average < line) ? goodColor : badColor));
+
+                    content.innerHTML = `
+                        <div style="padding:8px 4px;">
+                            <h4 style="margin:0 0 8px;">Last 20 Games Splits vs Line</h4>
+                            <div style="margin-bottom:6px; font-size:13px; color:#aaa;">
+                                Line: <strong style="color:#fff;">${line}</strong> &nbsp;&nbsp; 
+                                Hit Rate: <strong style="color:#00ffcc;">${Math.round((last5.filter(g => isMore ? g.value > line : g.value < line).length / last5.length) * 100)}% (${last5.filter(g => isMore ? g.value > line : g.value < line).length}/${last5.length})</strong>
+                            </div>
+                            <div style="height:260px; position:relative;">
+                                <canvas id="splitsChart"></canvas>
+                            </div>
+                            <div style="margin-top:8px; font-size:11px; color:#888; display:flex; gap:12px; flex-wrap:wrap;">
+                                <span style="color:#22c55e;">■ Green = Hit</span>
+                                <span style="color:#ef4444;">■ Red = Missed</span>
+                            </div>
+                        </div>
+                    `;
+
+                    setTimeout(() => {
+                        const ctx = document.getElementById('splitsChart');
+                        if (!ctx || !window.Chart) return;
+
+                        new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: row['Stat Type'],
+                                    data: dataPoints,
+                                    backgroundColor: colors,
+                                    borderColor: '#fff',
+                                    borderWidth: 1,
+                                    borderRadius: 4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 11 } } },
+                                    x: { grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 11 }, maxRotation: 45, minRotation: 45 } }
+                                },
+                                plugins: {
+                                    legend: { display: false },
+                                    annotation: {
+                                        annotations: {
+                                            line1: {
+                                                type: 'line',
+                                                yMin: line,
+                                                yMax: line,
+                                                borderColor: '#eab308',
+                                                borderWidth: 2,
+                                                borderDash: [4, 3]
+                                            }
+                                        }
+                                    },
+                                    datalabels: {
+                                        anchor: 'end',
+                                        align: 'top',
+                                        color: '#fff',
+                                        font: { weight: 'bold', size: 11 },
+                                        formatter: (value, context) => hitLabels[context.dataIndex] || value.toFixed(1)
+                                    }
+                                }
+                            },
+                            plugins: window.ChartDataLabels ? [window.ChartDataLabels] : []
+                        });
+                    }, 80);
+
+                } else if (sport === 'mlb') {
                     // ========== EXACT MLB SPLITS LOGIC (copied and adapted from MLB code) ==========
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     
