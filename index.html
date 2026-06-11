@@ -398,29 +398,36 @@
                 margin: 8px auto 4px;
             }
 
-            /* More compact player popup on mobile to reduce scrolling */
+            /* Aggressive compaction for Wix mobile iframe - goal: minimal/no scrolling */
+            #playerPopup.bottom-sheet {
+                max-height: 88vh; /* account for Wix bottom menu bar */
+            }
             #playerPopup.bottom-sheet .header {
-                padding: 8px 12px 6px;
+                padding: 5px 8px 3px;
             }
             #playerPopup.bottom-sheet .stats-boxes {
-                gap: 4px;
-                margin-bottom: 4px;
+                gap: 2px;
+                margin-bottom: 2px;
             }
             #playerPopup.bottom-sheet .stat-box {
-                min-width: 48px;
-                padding: 3px 5px;
+                min-width: 42px;
+                padding: 1px 3px;
             }
             #playerPopup.bottom-sheet .stat-label {
-                font-size: 8px;
+                font-size: 6.5px;
             }
             #playerPopup.bottom-sheet .stat-value {
-                font-size: 12px;
+                font-size: 10px;
             }
             #playerPopup.bottom-sheet .tab-content {
-                padding: 6px 8px;
+                padding: 3px 5px;
             }
             #playerPopup.bottom-sheet #popupTabs {
-                padding: 4px 8px;
+                padding: 2px 5px;
+            }
+            #playerPopup.bottom-sheet .tab {
+                padding: 3px 8px;
+                font-size: 10px;
             }
 
             /* Better scroll behavior inside bottom sheet */
@@ -434,12 +441,13 @@
                 overflow-y: auto;
             }
 
-            /* Smaller chart area on mobile to reduce scrolling */
+            /* Much smaller chart area on mobile (Wix iframe) */
             #playerPopup.bottom-sheet #chartContainer {
-                max-height: 220px !important;
+                max-height: 160px !important;
+                margin: 4px 0;
             }
             #playerPopup.bottom-sheet canvas {
-                max-height: 200px !important;
+                max-height: 150px !important;
             }
             /* Better touch targets for prev/next arrows on mobile */
             #prevPlayer, #nextPlayer {
