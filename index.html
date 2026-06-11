@@ -369,10 +369,10 @@
                 width: 96%; 
                 top: 30px; 
                 padding: 8px;
-                max-height: 92vh;
+                max-height: 95vh;
             }
 
-            /* Bottom Sheet for Player Details on Mobile - excellent UX */
+            /* Bottom Sheet for Player Details on Mobile — full screen for reliable swiping */
             #playerPopup.bottom-sheet {
                 top: auto;
                 bottom: 0;
@@ -381,7 +381,8 @@
                 width: 100%;
                 max-width: 100%;
                 border-radius: 20px 20px 0 0;
-                max-height: 88vh;
+                max-height: 96vh;
+                height: 96vh;
                 transform: translateY(100%);
                 transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
                 box-shadow: 0 -8px 30px rgba(0,0,0,0.6);
@@ -429,6 +430,8 @@
             #playerPopup.bottom-sheet #popupContent {
                 overscroll-behavior: contain;
                 -webkit-overflow-scrolling: touch;
+                max-height: calc(96vh - 140px); /* Leave room for header + floating bar */
+                overflow-y: auto;
             }
 
             /* Smaller chart area on mobile to reduce scrolling */
@@ -2109,6 +2112,8 @@
                 // Default: Card view for All tab
                 // (Info text moved to top header for cleaner flow — see updateSportTabs / title-header logic)
 
+                currentFiltered = allRows; // Enable swipe navigation from All tab
+
                 allRows.slice(0, 300).forEach((row, idx) => {
                     const card = createPlayerCard(row, idx, row._sport);
                     contentDiv.appendChild(card);
@@ -2131,6 +2136,9 @@
             if (window.innerWidth <= 768) {
                 popup.classList.add('bottom-sheet');
 
+                // Make popup more full-screen on mobile for reliable swiping (like Tinder)
+                popup.style.maxHeight = '96vh';
+
                 // Add drag handle if not present
                 if (!popup.querySelector('.drag-handle')) {
                     const dragHandle = document.createElement('div');
@@ -2148,24 +2156,21 @@
                     `;
                     popup.appendChild(betBar);
 
-                    // Attach click handlers
+                    // Hide the original buttons inside Overview to avoid duplicates
+                    const originalButtons = popup.querySelector('.popup-buttons');
+                    if (originalButtons) originalButtons.style.display = 'none';
+
                     setTimeout(() => {
                         const lessBtn = popup.querySelector('#mobileLessBtn');
                         const moreBtn = popup.querySelector('#mobileMoreBtn');
                         const currentRowData = currentFiltered[currentRowIndex];
 
-                        if (lessBtn && currentRowData) {
-                            lessBtn.onclick = () => {
-                                toggleBet(currentRowData, 'Less', currentPopupSport);
-                            };
-                        }
-                        if (moreBtn && currentRowData) {
-                            moreBtn.onclick = () => {
-                                toggleBet(currentRowData, 'More', currentPopupSport);
-                            };
-                        }
+                        if (lessBtn && currentRowData) lessBtn.onclick = () => toggleBet(currentRowData, 'Less', currentPopupSport);
+                        if (moreBtn && currentRowData) moreBtn.onclick = () => toggleBet(currentRowData, 'More', currentPopupSport);
                     }, 50);
                 }
+                const inlineButtons = popup.querySelector('.popup-buttons');
+                if (inlineButtons) inlineButtons.style.display = 'none';
 
                 // Trigger animation
                 requestAnimationFrame(() => {
@@ -2173,10 +2178,15 @@
                 });
             } else {
                 popup.classList.remove('bottom-sheet', 'show');
+                popup.style.maxHeight = '';
                 const existingHandle = popup.querySelector('.drag-handle');
                 if (existingHandle) existingHandle.remove();
                 const existingBetBar = popup.querySelector('.mobile-bet-bar');
                 if (existingBetBar) existingBetBar.remove();
+
+                // Restore inline buttons on desktop
+                const inlineButtons = popup.querySelector('.popup-buttons');
+                if (inlineButtons) inlineButtons.style.display = '';
             }
 
             const playerName = row['Player Name'] || '';
@@ -2536,16 +2546,11 @@
         }
 
         function navigatePopup(delta) {
-            if (currentSport === 'all') {
-                document.getElementById('playerPopup').style.display = 'none';
-                document.getElementById('overlay').style.display = 'none';
-                return;
-            }
-            const store = dataStore[currentSport];
+            // Navigation now works on All tab too (we set currentFiltered there)
             let newIndex = currentRowIndex + delta;
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
-            showPlayerPopup(currentFiltered[newIndex], newIndex, currentSport);
+            showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
         // ==================== EDGE EXPLANATION MODAL ====================
