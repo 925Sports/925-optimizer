@@ -1358,13 +1358,14 @@
                         tdLine.textContent = row['Line Score'] || row.Line || '-';
                         tr.appendChild(tdLine);
 
-                        // PP - UD (PrizePicks Line Score - Underdog Line). 0 if UD empty.
+                        // PP - UD (PrizePicks Line Score - Underdog Line). 0 if UD is missing/empty.
                         const tdPPUD = document.createElement('td');
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
                         const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
-                        const udLineVal = parseFloat(row['Underdog Line'] || 0);
-                        const ppudDiff = (udLineVal === 0 ? 0 : (ppLineVal - udLineVal)).toFixed(1);
+                        const udRaw = row['Underdog Line'];
+                        const udLineVal = (udRaw === undefined || udRaw === null || udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
+                        const ppudDiff = (udLineVal === 0 ? '0.0' : (ppLineVal - udLineVal).toFixed(1));
                         tdPPUD.textContent = ppudDiff;
                         tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
@@ -1726,11 +1727,12 @@
                     tdEdge.setAttribute('data-label', 'Edge');
                     tr.appendChild(tdEdge);
 
-                    // PP - UD
+                    // PP - UD (0 if Underdog Line is missing)
                     const tdPPUD = document.createElement('td');
                     const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
-                    const udLine = parseFloat(row['Underdog Line'] || 0);
-                    const ppudDiff = (udLine === 0 ? 0 : (ppLine - udLine)).toFixed(1);
+                    const udRaw = row['Underdog Line'];
+                    const udLine = (udRaw === undefined || udRaw === null || udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
+                    const ppudDiff = (udLine === 0 ? '0.0' : (ppLine - udLine).toFixed(1));
                     tdPPUD.textContent = ppudDiff;
                     tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
                     tdPPUD.setAttribute('data-label', 'PP-UD');
