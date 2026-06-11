@@ -1655,31 +1655,26 @@
             const isTableView = (document.getElementById('viewSelect')?.value === 'table');
 
             if (isTableView) {
-                // Ensure game logs are loaded for L5/L20 calculations across all sports
-                // This fixes the missing values on All + Table view
-                const logsReady = (dataStore.nba.gameLogs && dataStore.nba.gameLogs.length > 0) &&
-                                  (dataStore.wnba.gameLogs && dataStore.wnba.gameLogs.length > 0) &&
-                                  (dataStore.mlb.gameLogs && dataStore.mlb.gameLogs.length > 0);
+                // Load game logs in background for better L5/L20 data (non-blocking)
+                // We render the table immediately and show "-" where logs aren't available yet
+                Promise.allSettled([
+                    ensureGameLogsLoaded('nba'),
+                    ensureGameLogsLoaded('wnba'),
+                    ensureGameLogsLoaded('mlb')
+                ]).then(() => {
+                    // Optional: re-render once in background if user is still on All+Table
+                    // (helps if logs finish after first paint)
+                    if (currentSport === 'all' && document.getElementById('viewSelect')?.value === 'table') {
+                        // Only refresh if still in this exact state
+                        setTimeout(() => {
+                            if (currentSport === 'all' && document.getElementById('viewSelect')?.value === 'table') {
+                                renderAllView();
+                            }
+                        }, 800);
+                    }
+                });
 
-                if (!logsReady) {
-                    contentDiv.innerHTML = `
-                        <div class="loading" style="padding:40px 20px; text-align:center;">
-                            Loading game logs for accurate L5 Avg / L5 Hit% / L20 stats...<br>
-                            <span style="font-size:12px; color:#888;">This only happens the first time you use Table view on All.</span>
-                        </div>
-                    `;
-                    
-                    Promise.all([
-                        ensureGameLogsLoaded('nba'),
-                        ensureGameLogsLoaded('wnba'),
-                        ensureGameLogsLoaded('mlb')
-                    ]).then(() => {
-                        renderAllView(); // Re-render now that logs are ready
-                    });
-                    return;
-                }
-
-                // Render Table View for All tab
+                // Render Table View for All tab immediately (don't block on logs)
                 contentDiv.classList.add('table-view');
                 const table = document.createElement('table');
                 const thead = document.createElement('thead');
