@@ -1279,9 +1279,13 @@
                     } else if (store.contentSortColumn === 'PPUD') {
                         sortedFiltered.sort((a, b) => {
                             const aPP = parseFloat(a['Line Score'] || a.Line || 0);
-                            const aUD = parseFloat(a['Underdog Line'] || 0);
+                            const aUDRaw = (a['Underdog Line'] || '').toString().trim();
+                            const aUD = (aUDRaw === '' || isNaN(parseFloat(aUDRaw))) ? 0 : parseFloat(aUDRaw);
+
                             const bPP = parseFloat(b['Line Score'] || b.Line || 0);
-                            const bUD = parseFloat(b['Underdog Line'] || 0);
+                            const bUDRaw = (b['Underdog Line'] || '').toString().trim();
+                            const bUD = (bUDRaw === '' || isNaN(parseFloat(bUDRaw))) ? 0 : parseFloat(bUDRaw);
+
                             const aVal = (aUD === 0 ? 0 : aPP - aUD);
                             const bVal = (bUD === 0 ? 0 : bPP - bUD);
                             return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
@@ -1363,8 +1367,8 @@
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
                         const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
-                        const udRaw = row['Underdog Line'];
-                        const udLineVal = (udRaw === undefined || udRaw === null || udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
+                        const udRaw = (row['Underdog Line'] || '').toString().trim();
+                        const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
                         const ppudDiff = (udLineVal === 0 ? '0.0' : (ppLineVal - udLineVal).toFixed(1));
                         tdPPUD.textContent = ppudDiff;
                         tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
@@ -1730,8 +1734,8 @@
                     // PP - UD (0 if Underdog Line is missing)
                     const tdPPUD = document.createElement('td');
                     const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
-                    const udRaw = row['Underdog Line'];
-                    const udLine = (udRaw === undefined || udRaw === null || udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
+                    const udRaw = (row['Underdog Line'] || '').toString().trim();
+                    const udLine = (udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
                     const ppudDiff = (udLine === 0 ? '0.0' : (ppLine - udLine).toFixed(1));
                     tdPPUD.textContent = ppudDiff;
                     tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
