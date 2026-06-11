@@ -1311,7 +1311,7 @@
                         { label: 'Stat', key: null, sortable: false },
                         { label: 'Edge', key: 'Edge', sortable: true },
                         { label: 'Line', key: 'Line', sortable: true },
-                        { label: 'PP - UD', key: 'PPUD', sortable: true },
+                        { label: 'PP vs UD', key: 'PPUD', sortable: true },
                         { label: 'L5 Avg', key: 'L5Avg', sortable: true },
                         { label: 'L5 Hit%', key: 'L5Hit', sortable: true },
                         { label: 'L20 Avg', key: 'L20Avg', sortable: true },
@@ -1545,18 +1545,7 @@
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
                         const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
-
-                        // Support multiple possible column names for Underdog Line
-                        const udRaw = (
-                            row['Underdog Line'] ||
-                            row['UnderdogLine'] ||
-                            row['UD Line'] ||
-                            row['ud_line'] ||
-                            row['Underdog_Line'] ||
-                            ''
-                        ).toString().trim();
-
-                        const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? null : parseFloat(udRaw);
+                        const udLineVal = getUnderdogLine(row);
 
                         let displayValue, numericDiff;
                         if (udLineVal === null) {
@@ -1880,7 +1869,7 @@
                 contentDiv.classList.add('table-view');
                 const table = document.createElement('table');
                 const thead = document.createElement('thead');
-                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'PP-UD', 'L5 Avg', 'L5 Hit%', 'L20 Avg', 'L20 Hit%', 'Actions'];
+                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'PP vs UD', 'L5 Avg', 'L5 Hit%', 'L20 Avg', 'L20 Hit%', 'Actions'];
                 const headerRow = document.createElement('tr');
                 headers.forEach(h => {
                     const th = document.createElement('th');
@@ -1932,18 +1921,7 @@
                     // Shows "-" when the prop does not exist on Underdog.
                     const tdPPUD = document.createElement('td');
                     const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
-
-                    // Support multiple possible column names for Underdog Line
-                    const udRaw = (
-                        row['Underdog Line'] ||
-                        row['UnderdogLine'] ||
-                        row['UD Line'] ||
-                        row['ud_line'] ||
-                        row['Underdog_Line'] ||
-                        ''
-                    ).toString().trim();
-
-                    const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? null : parseFloat(udRaw);
+                    const udLineVal = getUnderdogLine(row);
 
                     let displayValue, numericDiff;
                     if (udLineVal === null) {
@@ -1956,7 +1934,7 @@
 
                     tdPPUD.textContent = displayValue;
                     tdPPUD.style.color = numericDiff > 0 ? '#22c55e' : (numericDiff < 0 ? '#ef4444' : '#aaa');
-                    tdPPUD.setAttribute('data-label', 'PP-UD');
+                    tdPPUD.setAttribute('data-label', 'PP vs UD');
                     tr.appendChild(tdPPUD);
 
                     // Calculate L5 and L20 using the fast playerLogCache (much faster than filter+sort every row)
@@ -3067,6 +3045,39 @@
         function getHotColdStatus(playerName, sport) {
             // Simple placeholder - can be enhanced with real streak logic per sport
             return 'Neutral';
+        }
+
+        /**
+         * Safely extracts the Underdog line from a row.
+         * Returns null if missing, empty, "0", or invalid.
+         * This is more defensive, especially for MLB data quality issues.
+         */
+        function getUnderdogLine(row) {
+            const possibleKeys = [
+                'Underdog Line', 'UnderdogLine', 'UD Line', 'ud_line', 'Underdog_Line'
+            ];
+
+            let rawValue = '';
+            for (const key of possibleKeys) {
+                if (row.hasOwnProperty(key) && row[key] != null) {
+                    rawValue = String(row[key]).trim();
+                    if (rawValue !== '') break;
+                }
+            }
+
+            if (!rawValue || rawValue === '' || rawValue.toLowerCase() === 'null') {
+                return null;
+            }
+
+            const num = parseFloat(rawValue);
+
+            // Treat 0 (or very close to 0) as "no Underdog line"
+            // This catches common data issues in MLB feeds where missing lines are stored as 0
+            if (isNaN(num) || Math.abs(num) < 0.01) {
+                return null;
+            }
+
+            return num;
         }
 
         // ==================== FILTER POPUPS ====================
