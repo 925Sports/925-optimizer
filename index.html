@@ -460,6 +460,11 @@
             <button class="sport-tab active" data-sport="all">All</button>
         </div>
 
+        <!-- Subtle info for All tab (non-disruptive placement) -->
+        <div id="allTabInfo" style="display:none; align-items:center; gap:6px; font-size:12px; color:#666; background:#111; padding:4px 10px; border-radius:9999px; white-space:nowrap;">
+            <span id="allTabInfoText"></span>
+        </div>
+
         <button onclick="showToolInfo()" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:9999px;font-size:12px;cursor:pointer;">How to use</button>
     </div>
 
@@ -944,6 +949,9 @@
                 // Build stat type tabs also for All (combined from all sports)
                 buildStatTabs();
                 renderAllView();
+
+                // Update subtle All-tab info badge in top header (non-disruptive location)
+                updateAllTabHeaderInfo();
             } else {
                 if (filterBtnEl) filterBtnEl.style.display = '';
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = '';
@@ -979,6 +987,54 @@
                     initCurrentSport();
                 };
             });
+        }
+
+        // Subtle info badge for All tab - placed in top header so it doesn't disrupt card flow
+        function updateAllTabHeaderInfo() {
+            const infoEl = document.getElementById('allTabInfo');
+            const textEl = document.getElementById('allTabInfoText');
+            if (!infoEl || !textEl) return;
+
+            if (currentSport !== 'all') {
+                infoEl.style.display = 'none';
+                return;
+            }
+
+            // Recompute current filtered count (lightweight)
+            let allRows = [];
+            ['nba', 'wnba', 'mlb'].forEach(s => {
+                (dataStore[s].allData || []).forEach(row => {
+                    allRows.push({ ...row, _sport: s });
+                });
+            });
+
+            const selectedOddsType = (document.getElementById('oddsSelect')?.value || 'standard').toLowerCase();
+            if (selectedOddsType !== 'all') {
+                allRows = allRows.filter(r => {
+                    const oddsType = (r['Odds Type'] || 'standard').toLowerCase();
+                    return oddsType === selectedOddsType;
+                });
+            }
+
+            const term = (searchInput.value || '').toLowerCase().trim();
+            if (term) {
+                allRows = allRows.filter(r =>
+                    (r['Player Name'] || '').toLowerCase().includes(term) ||
+                    (r['Stat Type'] || '').toLowerCase().includes(term)
+                );
+            }
+
+            if (window.allStatTypesSelected && window.allStatTypesSelected.size > 0) {
+                allRows = allRows.filter(r => window.allStatTypesSelected.has((r['Stat Type'] || '').trim()));
+            }
+
+            const count = allRows.length;
+            const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
+                             (selectedOddsType === 'demon' ? 'Demon 👿' : 
+                             (selectedOddsType === 'goblin' ? 'Goblin 👺' : 'All'));
+
+            textEl.innerHTML = `<strong>${count}</strong> ${oddsLabel} bets`;
+            infoEl.style.display = 'flex';
         }
 
         function buildStatTabs() {
@@ -1071,6 +1127,7 @@
             searchInput.oninput = () => {
                 if (currentSport === 'all') {
                     renderAllView();
+                    updateAllTabHeaderInfo();
                 } else {
                     dataStore[currentSport].searchTerm = searchInput.value.toLowerCase().trim();
                     renderContent();
@@ -1099,6 +1156,7 @@
             oddsSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
+                    updateAllTabHeaderInfo();
                 } else {
                     dataStore[currentSport].currentOddsType = oddsSelect.value;
                     renderContent();
@@ -1991,25 +2049,7 @@
                 contentDiv.appendChild(table);
             } else {
                 // Default: Card view for All tab
-                const header = document.createElement('div');
-                header.style.cssText = 'max-width:1400px; margin:0 auto; padding:0 24px 8px; color:#888; font-size:13px; display:flex; justify-content:space-between; align-items:center; gap:20px;';
-                
-                const oddsLabel = selectedOddsType === 'standard' ? 'Standard' : 
-                                 (selectedOddsType === 'demon' ? 'Demon' : 
-                                 (selectedOddsType === 'goblin' ? 'Goblin' : 'All'));
-                
-                const leftText = document.createElement('div');
-                leftText.innerHTML = `Showing <strong>${allRows.length}</strong> ${oddsLabel} bets across NBA • WNBA • MLB`;
-                
-                // Right side text - positioned to the right of Clear Bets area
-                const rightText = document.createElement('div');
-                rightText.style.color = '#555';
-                rightText.style.textAlign = 'right';
-                rightText.innerHTML = `Click any card for details • Bets added to shared slip`;
-                
-                header.appendChild(leftText);
-                header.appendChild(rightText);
-                contentDiv.appendChild(header);
+                // (Info text moved to top header for cleaner flow — see updateSportTabs / title-header logic)
 
                 allRows.slice(0, 300).forEach((row, idx) => {
                     const card = createPlayerCard(row, idx, row._sport);
