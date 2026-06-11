@@ -371,6 +371,31 @@
                 padding: 8px;
                 max-height: 92vh;
             }
+
+            /* Bottom Sheet for Player Details on Mobile - excellent UX */
+            #playerPopup.bottom-sheet {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                max-width: 100%;
+                border-radius: 20px 20px 0 0;
+                max-height: 88vh;
+                transform: translateY(100%);
+                transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+                box-shadow: 0 -8px 30px rgba(0,0,0,0.6);
+            }
+            #playerPopup.bottom-sheet.show {
+                transform: translateY(0);
+            }
+            .drag-handle {
+                width: 48px;
+                height: 5px;
+                background: #555;
+                border-radius: 3px;
+                margin: 8px auto 4px;
+            }
             #playerPopup .header {
                 padding: 6px;
             }
@@ -395,6 +420,17 @@
             }
             .filter-btn {
                 padding: 10px 16px !important;
+            }
+
+            /* Sticky Action Bar for mobile (More/Less buttons in popup) */
+            .popup-buttons {
+                position: sticky;
+                bottom: 0;
+                background: #1a1a1a;
+                padding: 10px 0;
+                z-index: 20;
+                box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
+                border-top: 1px solid #333;
             }
         }
     </style>
@@ -1988,17 +2024,25 @@
             currentPopupSport = sport;
             currentRowIndex = index;
 
-            // Load game logs on demand (this is the key speed improvement)
-            await ensureGameLogsLoaded(sport);
-
             const popup = document.getElementById('playerPopup');
             const overlay = document.getElementById('overlay');
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
+            // Bottom sheet UX on mobile
+            if (window.innerWidth <= 768) {
+                popup.classList.add('bottom-sheet');
+                // Trigger animation
+                requestAnimationFrame(() => {
+                    popup.classList.add('show');
+                });
+            } else {
+                popup.classList.remove('bottom-sheet', 'show');
+            }
+
             const playerName = row['Player Name'] || '';
 
-            // Header
+            // Header (shown instantly)
             const betTag = (row['Bet Tag'] || '').trim();
             const lineVal = row['Line Score'] || row.Line || '-';
             const statType = row['Stat Type'] || '';
@@ -2094,7 +2138,7 @@
             document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
             document.getElementById('popupScheduledAt').innerHTML = row['Scheduled At'] ? new Date(row['Scheduled At']).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '';
 
-            // Compute L5 Avg and L5 Hit Rate on the fly (pulling logic from Splits tab)
+            // Initial L5 (will be '-' until game logs load in background)
             let l5Avg = '-';
             let l5HitPct = '-';
             const logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
@@ -2130,6 +2174,51 @@
                 <div class="stat-box"><div class="stat-label">OPs</div><div class="stat-value">${row['MIN Avg'] || row['Opportunities'] || row['opp'] || '-'}</div></div>
             `;
 
+            // ========== INSTANT POPUP: Load game logs in background (non-blocking) ==========
+            ensureGameLogsLoaded(sport).then(() => {
+                if (popup.style.display === 'block' && currentPopupSport === sport) {
+                    // Recompute L5 stats now that logs are loaded
+                    let newL5Avg = '-';
+                    let newL5HitPct = '-';
+                    const freshLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    if (freshLogs.length > 0) {
+                        const sorted = [...freshLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+                        const last5Logs = sorted.slice(0, 5);
+                        if (last5Logs.length > 0) {
+                            const lineValNum = parseFloat(row['Line Score'] || row.Line || 0);
+                            const isMoreBet = (row['Bet Tag'] || '').toLowerCase().includes('more') || (row['Bet Tag'] || '').toLowerCase().includes('over');
+                            let sum = 0, hits = 0;
+                            last5Logs.forEach(log => {
+                                const val = getStatValue(log, row['Stat Type'] || '', sport);
+                                sum += val;
+                                if (isMoreBet ? val > lineValNum : val < lineValNum) hits++;
+                            });
+                            newL5Avg = (sum / last5Logs.length).toFixed(1);
+                            newL5HitPct = ((hits / last5Logs.length) * 100).toFixed(0);
+                        }
+                    }
+                    // Update the L5 stat boxes
+                    const sb = document.getElementById('statsBoxes');
+                    if (sb) {
+                        sb.innerHTML = `
+                            <div class="stat-box"><div class="stat-label">Edge</div><div class="stat-value" style="color:#00ffcc">${parseFloat(row['Edge %'] || 0).toFixed(1)}%</div></div>
+                            <div class="stat-box"><div class="stat-label">Line</div><div class="stat-value">${row['Line Score'] || row.Line || '-'}</div></div>
+                            <div class="stat-box"><div class="stat-label">L5 Avg</div><div class="stat-value">${newL5Avg}</div></div>
+                            <div class="stat-box"><div class="stat-label">L5 Hit</div><div class="stat-value">${newL5HitPct ? newL5HitPct + '%' : '-'}</div></div>
+                            <div class="stat-box"><div class="stat-label">OPs</div><div class="stat-value">${row['MIN Avg'] || row['Opportunities'] || row['opp'] || '-'}</div></div>
+                        `;
+                    }
+                    // If user is on Game Log or Splits tab, refresh it with fresh data
+                    const activeTabEl = document.querySelector('#popupTabs .tab.active');
+                    if (activeTabEl) {
+                        const tabName = activeTabEl.textContent.trim();
+                        if (tabName === 'Game Log' || tabName === 'Splits') {
+                            renderPopupContent(tabName, row, sport);
+                        }
+                    }
+                }
+            }).catch(() => {});
+
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
@@ -2157,6 +2246,7 @@
             if (closeBtn) {
                 closeBtn.onclick = null; // clear any previous
                 closeBtn.onclick = () => {
+                    popup.classList.remove('bottom-sheet', 'show');
                     popup.style.display = 'none';
                     overlay.style.display = 'none';
                     if (currentChart) { currentChart.destroy(); currentChart = null; }
@@ -3358,6 +3448,8 @@
             });
 
             document.getElementById('overlay').onclick = () => {
+                const playerPop = document.getElementById('playerPopup');
+                if (playerPop) playerPop.classList.remove('bottom-sheet', 'show');
                 document.querySelectorAll('.popup, #playerPopup').forEach(p => p.style.display = 'none');
                 document.getElementById('overlay').style.display = 'none';
             };
