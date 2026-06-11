@@ -1689,7 +1689,8 @@
                 table.appendChild(thead);
 
                 const tbody = document.createElement('tbody');
-                allRows.slice(0, 400).forEach((row, idx) => {
+                // Limit initial render for speed on All tab (user can scroll or search for more)
+                allRows.slice(0, 300).forEach((row, idx) => {
                     const tr = document.createElement('tr');
                     const sportLabel = (row._sport || '').toUpperCase();
 
@@ -1735,11 +1736,18 @@
                     tdPPUD.setAttribute('data-label', 'PP-UD');
                     tr.appendChild(tdPPUD);
 
-                    // Calculate L5 and L20 on the fly for All tab (use robust name matching)
-                    const playerNameForMatch = row['Player Name'] || '';
-                    const playerLogs = (dataStore[row._sport]?.gameLogs || []).filter(l => 
-                        nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerNameForMatch)
-                    ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+                    // Calculate L5 and L20 using the fast playerLogCache (much faster than filter+sort every row)
+                    const normPlayer = normalizeName(row['Player Name'] || '');
+                    let playerLogs = (dataStore[row._sport]?.playerLogCache?.get(normPlayer) || []);
+                    
+                    // Fallback to nameMatches scan only if cache miss (should be rare)
+                    if (playerLogs.length === 0 && dataStore[row._sport]?.gameLogs?.length) {
+                        playerLogs = dataStore[row._sport].gameLogs.filter(l => 
+                            nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', row['Player Name'] || '')
+                        );
+                    }
+                    // Ensure sorted newest first
+                    playerLogs = [...playerLogs].sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
                     const line = parseFloat(row['Line Score'] || row.Line || 0);
                     const betTag = (row['Bet Tag'] || '').toLowerCase();
@@ -1797,16 +1805,40 @@
                     tdL20Hit.setAttribute('data-label', 'L20 Hit%');
                     tr.appendChild(tdL20Hit);
 
-                    // Actions (More/Less buttons)
+                    // Actions (More/Less buttons) - with Bet Tag visual hint (green/red outline)
                     const tdActions = document.createElement('td');
                     tdActions.setAttribute('data-label', 'Actions');
                     const btnDiv = document.createElement('div');
                     btnDiv.className = 'buttons';
+
+                    let lessClass = 'button less';
+                    let moreClass = 'button more';
+                    const bt = (row['Bet Tag'] || '').toLowerCase();
+                    if (bt.includes('over') || bt.includes('more') || bt.includes('↑')) moreClass += ' green-outline';
+                    if (bt.includes('under') || bt.includes('less') || bt.includes('↓')) lessClass += ' red-outline';
+
                     btnDiv.innerHTML = `
-                        <button class="button less" data-choice="Less">↓ Less</button>
-                        <button class="button more" data-choice="More">↑ More</button>
+                        <button class="${lessClass}" data-choice="Less">↓ Less</button>
+                        <button class="${moreClass}" data-choice="More">↑ More</button>
                     `;
                     tdActions.appendChild(btnDiv);
+
+                    // Attach click handlers (same behavior as individual sport tabs)
+                    const lessBtn = btnDiv.querySelector('.button.less');
+                    const moreBtn = btnDiv.querySelector('.button.more');
+                    if (lessBtn) {
+                        lessBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'Less', row._sport);
+                        };
+                    }
+                    if (moreBtn) {
+                        moreBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'More', row._sport);
+                        };
+                    }
+
                     tr.appendChild(tdActions);
 
                     tbody.appendChild(tr);
