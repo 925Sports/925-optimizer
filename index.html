@@ -1538,13 +1538,15 @@
                         tdLine.textContent = row['Line Score'] || row.Line || '-';
                         tr.appendChild(tdLine);
 
-                        // PP - UD (PrizePicks Line Score - Underdog Line). 0 if UD is missing/empty.
+                        // PP - UD column: Shows PrizePicks line minus Underdog line.
+                        // Only calculates when a valid Underdog line exists.
+                        // Shows "-" when the prop does not exist on Underdog.
                         const tdPPUD = document.createElement('td');
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
                         const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
 
-                        // Support multiple possible column names for Underdog Line (common in different data sources)
+                        // Support multiple possible column names for Underdog Line
                         const udRaw = (
                             row['Underdog Line'] ||
                             row['UnderdogLine'] ||
@@ -1554,10 +1556,19 @@
                             ''
                         ).toString().trim();
 
-                        const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
-                        const ppudDiff = (udLineVal === 0 ? '0.0' : (ppLineVal - udLineVal).toFixed(1));
-                        tdPPUD.textContent = ppudDiff;
-                        tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
+                        const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? null : parseFloat(udRaw);
+
+                        let displayValue, numericDiff;
+                        if (udLineVal === null) {
+                            displayValue = '-';
+                            numericDiff = 0;
+                        } else {
+                            numericDiff = ppLineVal - udLineVal;
+                            displayValue = numericDiff.toFixed(1);
+                        }
+
+                        tdPPUD.textContent = displayValue;
+                        tdPPUD.style.color = numericDiff > 0 ? '#22c55e' : (numericDiff < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
 
                         // L5 / L20 values - calculate on the fly if pre-computed values are missing (robust for MLB + all sports)
@@ -1917,7 +1928,8 @@
                     tdEdge.setAttribute('data-label', 'Edge');
                     tr.appendChild(tdEdge);
 
-                    // PP - UD (0 if Underdog Line is missing)
+                    // PP - UD column: Shows PrizePicks line minus Underdog line.
+                    // Shows "-" when the prop does not exist on Underdog.
                     const tdPPUD = document.createElement('td');
                     const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
 
@@ -1931,10 +1943,19 @@
                         ''
                     ).toString().trim();
 
-                    const udLine = (udRaw === '' || isNaN(parseFloat(udRaw))) ? 0 : parseFloat(udRaw);
-                    const ppudDiff = (udLine === 0 ? '0.0' : (ppLine - udLine).toFixed(1));
-                    tdPPUD.textContent = ppudDiff;
-                    tdPPUD.style.color = parseFloat(ppudDiff) > 0 ? '#22c55e' : (parseFloat(ppudDiff) < 0 ? '#ef4444' : '#aaa');
+                    const udLineVal = (udRaw === '' || isNaN(parseFloat(udRaw))) ? null : parseFloat(udRaw);
+
+                    let displayValue, numericDiff;
+                    if (udLineVal === null) {
+                        displayValue = '-';
+                        numericDiff = 0;
+                    } else {
+                        numericDiff = ppLine - udLineVal;
+                        displayValue = numericDiff.toFixed(1);
+                    }
+
+                    tdPPUD.textContent = displayValue;
+                    tdPPUD.style.color = numericDiff > 0 ? '#22c55e' : (numericDiff < 0 ? '#ef4444' : '#aaa');
                     tdPPUD.setAttribute('data-label', 'PP-UD');
                     tr.appendChild(tdPPUD);
 
