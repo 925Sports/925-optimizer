@@ -1017,7 +1017,11 @@
             const store = dataStore[currentSport];
             contentDiv.innerHTML = '<div class="loading">Loading...</div>';
 
-            setTimeout(() => {
+            setTimeout(async () => {
+                // Ensure game logs are loaded for accurate L5/L20 stats in table view
+                if (store.currentView === 'table') {
+                    await ensureGameLogsLoaded(currentSport);
+                }
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
                 // Multi-select Stat Type filter
@@ -1688,15 +1692,15 @@
                     tdPPUD.setAttribute('data-label', 'PP-UD');
                     tr.appendChild(tdPPUD);
 
-                    // Calculate L5 and L20 on the fly for All tab
-                    const normPlayer = normalizeName(row['Player Name'] || '');
+                    // Calculate L5 and L20 on the fly for All tab (use robust name matching)
+                    const playerNameForMatch = row['Player Name'] || '';
                     const playerLogs = (dataStore[row._sport]?.gameLogs || []).filter(l => 
-                        normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
+                        nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerNameForMatch)
                     ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
                     const line = parseFloat(row['Line Score'] || row.Line || 0);
                     const betTag = (row['Bet Tag'] || '').toLowerCase();
-                    const isMore = betTag.includes('more') || betTag.includes('over');
+                    const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
 
                     // L5
                     const last5 = playerLogs.slice(0, 5);
