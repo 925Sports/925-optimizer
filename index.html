@@ -339,6 +339,27 @@
         .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .error-message { color: #ef4444; text-align: center; margin: 12px; }
 
+        /* Skeleton Loaders */
+        .skeleton {
+            background: linear-gradient(90deg, #1a1a1a 25%, #2a2a2a 50%, #1a1a1a 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: 8px;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .skeleton-card {
+            height: 280px;
+            border-radius: 16px;
+        }
+        .skeleton-row {
+            height: 48px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+        }
+
         @media (max-width: 768px) {
             .sport-tabs { width: 100%; justify-content: center; }
             .controls { flex-direction: column; align-items: stretch; }
@@ -365,6 +386,15 @@
             #prevPlayer, #nextPlayer {
                 padding: 12px 16px;
                 font-size: 18px;
+            }
+
+            /* Larger touch targets on mobile */
+            .button {
+                padding: 12px 16px !important;
+                font-size: 14px !important;
+            }
+            .filter-btn {
+                padding: 10px 16px !important;
             }
         }
     </style>
@@ -434,6 +464,14 @@
 
     <!-- Stat Type Tabs -->
     <div class="tabs" id="tabs"></div>
+
+    <!-- Quick Filter Chips (appears above content on Table view) -->
+    <div id="quickFilters" style="display:none; padding: 0 24px 8px; gap:8px; flex-wrap:wrap; max-width:1400px; margin:0 auto;">
+        <button onclick="applyQuickFilter('highEdge')" class="filter-btn" style="background:#22c55e; color:#000; padding:6px 14px; font-size:12px;">54%+ Edge</button>
+        <button onclick="applyQuickFilter('demon')" class="filter-btn" style="background:#7c3aed; color:white; padding:6px 14px; font-size:12px;">Demon 👿</button>
+        <button onclick="applyQuickFilter('goblin')" class="filter-btn" style="background:#f59e0b; color:#000; padding:6px 14px; font-size:12px;">Goblin 👺</button>
+        <button onclick="applyQuickFilter('clear')" class="filter-btn" style="background:#444; color:white; padding:6px 14px; font-size:12px;">Clear Filters</button>
+    </div>
 
     <!-- Main Content -->
     <div id="content"></div>
@@ -712,7 +750,17 @@
 
         // ==================== DATA LOADING & PREP ====================
         async function loadAllData() {
-            contentDiv.innerHTML = '<div class="loading">Loading prop data...<br><span style="font-size:12px;color:#888;">Game logs will load when you open a player</span></div>';
+            contentDiv.innerHTML = `
+                <div style="padding:40px 20px; text-align:center;">
+                    <div style="display:flex; justify-content:center; gap:8px; margin-bottom:16px;">
+                        <div class="skeleton" style="width:60px; height:60px; border-radius:9999px;"></div>
+                        <div class="skeleton" style="width:60px; height:60px; border-radius:9999px;"></div>
+                        <div class="skeleton" style="width:60px; height:60px; border-radius:9999px;"></div>
+                    </div>
+                    <div style="color:#00ffcc; font-weight:600;">Loading prop data...</div>
+                    <div style="font-size:12px; color:#888; margin-top:6px;">Game logs will load when you open a player</div>
+                </div>
+            `;
 
             // ==================== GAME LOG CONFIG (Phase 2) ====================
             // Priority: Local data/ folder > Remote URL
@@ -959,6 +1007,29 @@
             });
         }
 
+        function applyQuickFilter(type) {
+            if (currentSport === 'all') return;
+
+            const store = dataStore[currentSport];
+            if (!store) return;
+
+            if (type === 'clear') {
+                store.selectedStatTypes.clear();
+                store.currentOddsType = 'standard';
+                searchInput.value = '';
+                store.searchTerm = '';
+            } else if (type === 'highEdge') {
+                // Filter to high edge by temporarily setting a high threshold (we'll filter in render)
+                store.tempHighEdgeFilter = true;
+            } else if (type === 'demon') {
+                store.currentOddsType = 'demon';
+            } else if (type === 'goblin') {
+                store.currentOddsType = 'goblin';
+            }
+
+            renderContent();
+        }
+
         function attachControlListeners() {
             // Search
             searchInput.oninput = () => {
@@ -1034,7 +1105,14 @@
                 return;
             }
             const store = dataStore[currentSport];
-            contentDiv.innerHTML = '<div class="loading">Loading...</div>';
+            contentDiv.innerHTML = `
+                <div style="padding: 20px;">
+                    <div class="skeleton skeleton-row" style="width: 100%; margin-bottom: 8px;"></div>
+                    <div class="skeleton skeleton-row" style="width: 100%; margin-bottom: 8px;"></div>
+                    <div class="skeleton skeleton-row" style="width: 100%; margin-bottom: 8px;"></div>
+                    <div class="skeleton skeleton-row" style="width: 100%;"></div>
+                </div>
+            `;
 
             setTimeout(async () => {
                 // Ensure game logs are loaded for accurate L5/L20 stats in table view
