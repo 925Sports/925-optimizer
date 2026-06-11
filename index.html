@@ -2392,9 +2392,10 @@
                 };
             }
 
-            // === Enhanced Mobile Swipe Gestures in Player Popup ===
+            // === Tinder-style Swipe Gestures on entire Player Popup ===
             // Horizontal: Left/Right = change player
-            // Vertical: Up = More/Over + next | Down = Less/Under + next
+            // Vertical Up   = More + next player + toast
+            // Vertical Down = Less + next player + toast
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
                 let touchStartX = 0;
                 let touchStartY = 0;
@@ -2435,53 +2436,64 @@
                         return;
                     }
 
-                    // === Vertical Swipe (Up = More, Down = Less) ===
-                    // Stronger threshold to avoid conflicting with normal scrolling
-                    if (absY > absX * 1.3 && absY > 90 && velocity > 0.35) {
+                    // === Vertical Swipe on the whole popup (Tinder-style) ===
+                    if (absY > absX * 1.4 && absY > 85 && velocity > 0.3) {
                         const currentRow = currentFiltered[currentRowIndex];
                         if (!currentRow) return;
 
-                        if (diffY < 0) {
-                            // Swipe UP → Select "More" + go to next player
-                            toggleBet(currentRow, 'More', currentPopupSport);
+                        const playerName = currentRow['Player Name'];
+                        const statType = currentRow['Stat Type'];
+                        const choice = (diffY < 0) ? 'More' : 'Less';
 
-                            const moreBtn = document.getElementById('popMore') || document.getElementById('mobileMoreBtn');
-                            if (moreBtn) {
-                                moreBtn.style.transform = 'scale(1.2)';
-                                setTimeout(() => { if (moreBtn) moreBtn.style.transform = ''; }, 150);
-                            }
+                        // Perform the bet
+                        toggleBet(currentRow, choice, currentPopupSport);
 
-                            if (currentRowIndex < currentFiltered.length - 1) {
-                                setTimeout(() => {
-                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
-                                }, 180);
-                            }
+                        // Show confirmation toast
+                        showBetToast(`${playerName} — ${statType} ${choice} added`);
 
-                            if (navigator.vibrate) navigator.vibrate(20);
+                        // Light haptic
+                        if (navigator.vibrate) navigator.vibrate(25);
 
-                        } else {
-                            // Swipe DOWN → Select "Less" + go to next player
-                            toggleBet(currentRow, 'Less', currentPopupSport);
-
-                            const lessBtn = document.getElementById('popLess') || document.getElementById('mobileLessBtn');
-                            if (lessBtn) {
-                                lessBtn.style.transform = 'scale(1.2)';
-                                setTimeout(() => { if (lessBtn) lessBtn.style.transform = ''; }, 150);
-                            }
-
-                            if (currentRowIndex < currentFiltered.length - 1) {
-                                setTimeout(() => {
-                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
-                                }, 180);
-                            }
-
-                            if (navigator.vibrate) navigator.vibrate(20);
+                        // Auto-advance to next player
+                        if (currentRowIndex < currentFiltered.length - 1) {
+                            setTimeout(() => {
+                                showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                            }, 350);
                         }
                     }
                 };
 
                 popup.addEventListener('touchstart', handleTouchStart, { passive: true });
                 popup.addEventListener('touchend', handleTouchEnd, { passive: true });
+            }
+
+            // Toast notification for bet confirmation
+            function showBetToast(message) {
+                const existing = popup.querySelector('.bet-toast');
+                if (existing) existing.remove();
+
+                const toast = document.createElement('div');
+                toast.className = 'bet-toast';
+                toast.style.cssText = `
+                    position: absolute; bottom: 75px; left: 50%; transform: translateX(-50%);
+                    background: #22c55e; color: #000; padding: 8px 18px; border-radius: 9999px;
+                    font-size: 13px; font-weight: 600; white-space: nowrap;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 200; opacity: 0;
+                    transition: all 0.25s ease;
+                `;
+                toast.textContent = message;
+                popup.appendChild(toast);
+
+                requestAnimationFrame(() => { toast.style.opacity = '1'; });
+
+                setTimeout(() => {
+                    if (toast && toast.parentNode) {
+                        toast.style.opacity = '0';
+                        setTimeout(() => {
+                            if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+                        }, 200);
+                    }
+                }, 1600);
             }
         }
 
