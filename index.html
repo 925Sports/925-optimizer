@@ -396,16 +396,39 @@
                 border-radius: 3px;
                 margin: 8px auto 4px;
             }
-            #playerPopup .header {
-                padding: 6px;
+
+            /* More compact player popup on mobile to reduce scrolling */
+            #playerPopup.bottom-sheet .header {
+                padding: 8px 12px 6px;
             }
-            #playerPopup .tab-content {
-                padding: 8px 4px;
+            #playerPopup.bottom-sheet .stats-boxes {
+                gap: 4px;
+                margin-bottom: 4px;
             }
-            .stats-boxes { justify-content: flex-start; gap: 4px; }
-            .stat-box {
-                min-width: 52px;
-                padding: 4px 6px;
+            #playerPopup.bottom-sheet .stat-box {
+                min-width: 48px;
+                padding: 3px 5px;
+            }
+            #playerPopup.bottom-sheet .stat-label {
+                font-size: 8px;
+            }
+            #playerPopup.bottom-sheet .stat-value {
+                font-size: 12px;
+            }
+            #playerPopup.bottom-sheet .tab-content {
+                padding: 6px 8px;
+            }
+            #playerPopup.bottom-sheet #popupTabs {
+                padding: 4px 8px;
+            }
+
+            /* Better scroll behavior inside bottom sheet */
+            #playerPopup.bottom-sheet {
+                overscroll-behavior: contain;
+            }
+            #playerPopup.bottom-sheet #popupContent {
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
             }
             /* Better touch targets for prev/next arrows on mobile */
             #prevPlayer, #nextPlayer {
@@ -415,11 +438,18 @@
 
             /* Larger touch targets on mobile */
             .button {
-                padding: 12px 16px !important;
-                font-size: 14px !important;
+                padding: 14px 20px !important;
+                font-size: 15px !important;
             }
             .filter-btn {
                 padding: 10px 16px !important;
+            }
+
+            /* Extra prominent bet buttons inside player popup on mobile */
+            #playerPopup.bottom-sheet .popup-buttons .button {
+                padding: 16px 28px !important;
+                font-size: 16px !important;
+                font-weight: 700;
             }
 
             /* Sticky Action Bar for mobile (More/Less buttons in popup) */
@@ -2071,12 +2101,53 @@
             // Bottom sheet UX on mobile
             if (window.innerWidth <= 768) {
                 popup.classList.add('bottom-sheet');
+
+                // Add drag handle if not present
+                if (!popup.querySelector('.drag-handle')) {
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'drag-handle';
+                    popup.insertBefore(dragHandle, popup.firstChild);
+                }
+
+                // Add floating bet bar on mobile if not present
+                if (!popup.querySelector('.mobile-bet-bar')) {
+                    const betBar = document.createElement('div');
+                    betBar.className = 'mobile-bet-bar';
+                    betBar.innerHTML = `
+                        <button class="button less" id="mobileLessBtn">↓ Less</button>
+                        <button class="button more" id="mobileMoreBtn">↑ More</button>
+                    `;
+                    popup.appendChild(betBar);
+
+                    // Attach click handlers
+                    setTimeout(() => {
+                        const lessBtn = popup.querySelector('#mobileLessBtn');
+                        const moreBtn = popup.querySelector('#mobileMoreBtn');
+                        const currentRowData = currentFiltered[currentRowIndex];
+
+                        if (lessBtn && currentRowData) {
+                            lessBtn.onclick = () => {
+                                toggleBet(currentRowData, 'Less', currentPopupSport);
+                            };
+                        }
+                        if (moreBtn && currentRowData) {
+                            moreBtn.onclick = () => {
+                                toggleBet(currentRowData, 'More', currentPopupSport);
+                            };
+                        }
+                    }, 50);
+                }
+
                 // Trigger animation
                 requestAnimationFrame(() => {
                     popup.classList.add('show');
                 });
             } else {
                 popup.classList.remove('bottom-sheet', 'show');
+                const existingHandle = popup.querySelector('.drag-handle');
+                if (existingHandle) existingHandle.remove();
+                const existingBetBar = popup.querySelector('.mobile-bet-bar');
+                if (existingBetBar) existingBetBar.remove();
             }
 
             const playerName = row['Player Name'] || '';
@@ -2292,26 +2363,35 @@
                 };
             }
 
-            // === Mobile Swipe Navigation (left/right between players) ===
-            // Only enhance on touch devices; desktop behavior unchanged
+            // === Enhanced Mobile Swipe Gestures in Player Popup ===
+            // Horizontal: Left/Right = change player
+            // Vertical: Up = More/Over + next | Down = Less/Under + next
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
                 let touchStartX = 0;
                 let touchStartY = 0;
+                let touchStartTime = 0;
 
                 const handleTouchStart = (e) => {
                     touchStartX = e.changedTouches[0].screenX;
                     touchStartY = e.changedTouches[0].screenY;
+                    touchStartTime = Date.now();
                 };
 
                 const handleTouchEnd = (e) => {
                     const touchEndX = e.changedTouches[0].screenX;
                     const touchEndY = e.changedTouches[0].screenY;
+                    const touchEndTime = Date.now();
 
                     const diffX = touchStartX - touchEndX;
                     const diffY = touchStartY - touchEndY;
+                    const timeDiff = touchEndTime - touchStartTime;
 
-                    // Only trigger on horizontal swipe (ignore mostly vertical scrolls)
-                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 60) {
+                    const absX = Math.abs(diffX);
+                    const absY = Math.abs(diffY);
+                    const velocity = (absX + absY) / Math.max(timeDiff, 1); // rough velocity
+
+                    // === Horizontal Swipe (Left/Right player navigation) ===
+                    if (absX > absY && absX > 55) {
                         if (diffX > 0) {
                             // Swipe left → Next player
                             if (currentRowIndex < currentFiltered.length - 1) {
@@ -2322,6 +2402,58 @@
                             if (currentRowIndex > 0) {
                                 showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
                             }
+                        }
+                        return;
+                    }
+
+                    // === Vertical Swipe (Up = More, Down = Less) ===
+                    // Require decent vertical movement and reasonable speed
+                    if (absY > absX && absY > 70 && velocity > 0.4) {
+                        const currentRow = currentFiltered[currentRowIndex];
+                        if (!currentRow) return;
+
+                        if (diffY < 0) {
+                            // Swipe UP → Select "More" and go to next
+                            toggleBet(currentRow, 'More', currentPopupSport);
+                            
+                            // Visual feedback
+                            const moreBtn = document.getElementById('popMore');
+                            if (moreBtn) {
+                                moreBtn.style.transform = 'scale(1.15)';
+                                setTimeout(() => {
+                                    if (moreBtn) moreBtn.style.transform = '';
+                                }, 180);
+                            }
+
+                            // Try to go to next player
+                            if (currentRowIndex < currentFiltered.length - 1) {
+                                setTimeout(() => {
+                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                                }, 220);
+                            }
+
+                            // Light haptic feedback if available
+                            if (navigator.vibrate) navigator.vibrate(25);
+
+                        } else {
+                            // Swipe DOWN → Select "Less" and go to next
+                            toggleBet(currentRow, 'Less', currentPopupSport);
+
+                            const lessBtn = document.getElementById('popLess');
+                            if (lessBtn) {
+                                lessBtn.style.transform = 'scale(1.15)';
+                                setTimeout(() => {
+                                    if (lessBtn) lessBtn.style.transform = '';
+                                }, 180);
+                            }
+
+                            if (currentRowIndex < currentFiltered.length - 1) {
+                                setTimeout(() => {
+                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                                }, 220);
+                            }
+
+                            if (navigator.vibrate) navigator.vibrate(25);
                         }
                     }
                 };
@@ -2485,6 +2617,8 @@
                     Chart.register(ChartDataLabels);
                 }
 
+                const isMobileChart = window.innerWidth <= 768;
+
                 currentChart = new Chart(ctx, {
                     type: 'bar',
                     data: { labels, datasets: [{ label: 'Projection', data: values, backgroundColor: colors, borderColor: '#fff', borderWidth: 1, borderRadius: 4 }] },
@@ -2492,8 +2626,8 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         scales: {
-                            y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 12 } } },
-                            x: { grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: 12 } } }
+                            y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: isMobileChart ? 10 : 12 } } },
+                            x: { grid: { color: '#333' }, ticks: { color: '#ccc', font: { size: isMobileChart ? 9 : 12 }, maxRotation: isMobileChart ? 45 : 0 } }
                         },
                         plugins: {
                             legend: { display: false },
@@ -2501,7 +2635,7 @@
                                 anchor: 'end',
                                 align: 'top',
                                 color: '#fff',
-                                font: { weight: 'bold', size: 13 },
+                                font: { weight: 'bold', size: isMobileChart ? 10 : 13 },
                                 formatter: (value) => value.toFixed(1)
                             },
                             annotation: {
