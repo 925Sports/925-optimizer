@@ -3186,22 +3186,81 @@
             const popup = document.createElement('div');
             popup.className = 'popup';
             popup.style.display = 'block';
+            popup.style.maxWidth = '720px';
             popup.innerHTML = `
-                <button onclick="this.parentNode.remove();document.getElementById('overlay').style.display='none';" style="float:right;background:#333;color:#fff;border:none;padding:4px 12px;border-radius:9999px;">Close</button>
-                <h3>How to use the Multi-Sport Optimizer</h3>
-                <ul style="line-height:1.6;font-size:14px;">
-                    <li>Switch between <strong>NBA • WNBA • MLB • All</strong> using the top tabs.</li>
-                    <li>Each sport works independently with its own filters and stat tabs.</li>
-                    <li>Click <strong>More</strong> or <strong>Less</strong> on any card — bets from ALL sports go into one shared Bet Slip.</li>
-                    <li>Use the Bet Slips button (top right) to review your selections and generate parlay combinations.</li>
-                    <li>Click the ℹ️ icon on any card for deep player stats, game logs, splits & charts.</li>
-                    <li><strong>MLB Splits tab</strong> now uses enhanced hit rate (L5/L10/L20) + visual chart (green/red bars).</li>
-                    <li><strong>MLB only:</strong> Game O/U and Point Spread are color-coded in player popups (green/yellow/red).</li>
-                </ul>
-                <p style="font-size:12px;color:#888;margin-top:16px;">Data loaded from your local CSVs. Game logs enhance the popup but are optional.</p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h3 style="margin:0;">How to Use</h3>
+                    <button onclick="this.closest('.popup').remove();document.getElementById('overlay').style.display='none';" 
+                            style="background:#333;color:#fff;border:none;padding:4px 14px;border-radius:9999px;font-size:13px;">Close</button>
+                </div>
+
+                <!-- Tabs -->
+                <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
+                    <div id="tab-howto" class="tab active" style="padding:6px 16px; background:#22c55e; color:#000; border-radius:9999px; font-weight:600; cursor:pointer;">How to Use</div>
+                    <div id="tab-edge" class="tab" style="padding:6px 16px; background:#333; color:#fff; border-radius:9999px; font-weight:600; cursor:pointer;">Understanding Edge %</div>
+                </div>
+
+                <!-- Content: How to Use -->
+                <div id="content-howto">
+                    <ul style="line-height:1.65; font-size:14px; padding-left:20px;">
+                        <li>Switch between <strong>NBA • WNBA • MLB • All</strong> using the top tabs.</li>
+                        <li>Each sport works independently with its own filters and stat tabs.</li>
+                        <li>Click <strong>More</strong> or <strong>Less</strong> on any card — bets from ALL sports go into one shared Bet Slip.</li>
+                        <li>Use the <strong>Bet Slips</strong> button (top right) to review your selections and generate parlay combinations.</li>
+                        <li>Click the <strong>ℹ️</strong> icon on any card for deep player stats, game logs, splits &amp; charts.</li>
+                        <li>Use <strong>Table view</strong> to quickly scan and sort by Edge, L5 Avg, or L20 metrics.</li>
+                        <li>Focus first on props showing <strong>54%+ Edge</strong> for the best risk/reward.</li>
+                    </ul>
+                    <p style="font-size:12px; color:#888; margin-top:16px;">
+                        Data loaded from your local CSVs. Game logs enhance the popup but are optional.
+                    </p>
+                </div>
+
+                <!-- Content: Understanding Edge % -->
+                <div id="content-edge" style="display:none; font-size:14px; line-height:1.65;">
+                    <p>The <strong>Edge %</strong> displayed in this tool shows your estimated advantage on a prop bet.</p>
+                    <p>It is calculated by comparing the PrizePicks line to sharp, no-vig market probabilities. The higher the Edge %, the more value the bet is expected to hold over time.</p>
+
+                    <h4 style="color:#00ffcc; margin:18px 0 8px;">What is "Vig"?</h4>
+                    <p>Vig (short for vigorish) is the built-in commission sportsbooks charge on every bet. For example, a standard -110 line means you must risk $110 to win $100. This tax increases the implied probability and makes it harder to profit long-term.</p>
+                    <p>By removing the vig, we get a cleaner estimate of the true probability. This allows us to more accurately identify which PrizePicks props actually offer value.</p>
+
+                    <h4 style="color:#00ffcc; margin:18px 0 8px;">Targeting +EV Bets on PrizePicks</h4>
+                    <p><strong>+EV</strong> (Positive Expected Value) means that, over a large number of bets, you are expected to make money in the long run.</p>
+                    <p><strong>We recommend prioritizing bets with an Edge of 54% or higher</strong>. These represent the strongest value opportunities on the current slate.</p>
+                    <p>While bets with lower edges can still be useful (especially when building correlated parlays), starting with 54%+ Edge props gives you the highest probability of long-term profitability.</p>
+
+                    <p style="margin-top:18px; font-size:13px; color:#aaa;">
+                        Consistently identifying and betting on +EV props is one of the most reliable ways to build an edge in prop betting and daily fantasy sports.
+                    </p>
+                </div>
             `;
             document.body.appendChild(popup);
             document.getElementById('overlay').style.display = 'block';
+
+            // Tab switching logic
+            const tabHowto = popup.querySelector('#tab-howto');
+            const tabEdge = popup.querySelector('#tab-edge');
+            const contentHowto = popup.querySelector('#content-howto');
+            const contentEdge = popup.querySelector('#content-edge');
+
+            tabHowto.onclick = () => {
+                tabHowto.style.background = '#22c55e';
+                tabHowto.style.color = '#000';
+                tabEdge.style.background = '#333';
+                tabEdge.style.color = '#fff';
+                contentHowto.style.display = 'block';
+                contentEdge.style.display = 'none';
+            };
+
+            tabEdge.onclick = () => {
+                tabEdge.style.background = '#22c55e';
+                tabEdge.style.color = '#000';
+                tabHowto.style.background = '#333';
+                tabHowto.style.color = '#fff';
+                contentHowto.style.display = 'none';
+                contentEdge.style.display = 'block';
+            };
         }
 
         // ==================== INIT ====================
