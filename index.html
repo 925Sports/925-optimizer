@@ -1032,6 +1032,8 @@
             if (currentSport === 'all') {
                 if (filterBtnEl) filterBtnEl.style.display = 'none';
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = 'none';
+                const advBtn = document.getElementById('advancedFilterBtn');
+                if (advBtn) advBtn.style.display = 'none';
                 // Build stat type tabs also for All (combined from all sports)
                 buildStatTabs();
                 renderAllView();
@@ -1041,6 +1043,8 @@
             } else {
                 if (filterBtnEl) filterBtnEl.style.display = '';
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = '';
+                const advBtn = document.getElementById('advancedFilterBtn');
+                if (advBtn) advBtn.style.display = '';
                 const store = dataStore[currentSport];
                 if (!store || !store.allData.length) {
                     contentDiv.innerHTML = `<div class="loading">No ${currentSport.toUpperCase()} data loaded.</div>`;
@@ -1071,6 +1075,12 @@
                     currentSport = newSport;
                     updateSportTabs();
                     initCurrentSport();
+
+                    // Hide advanced filter button on All tab (it only works per-sport)
+                    const advBtn = document.getElementById('advancedFilterBtn');
+                    if (advBtn) {
+                        advBtn.style.display = (currentSport === 'all') ? 'none' : '';
+                    }
                 };
             });
         }
@@ -3348,8 +3358,8 @@
         }
 
         function showAdvancedFilterPopup() {
+            // Button is hidden on All tab, but keep guard for safety (no ugly alert)
             if (currentSport === 'all') { 
-                alert('Advanced filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
                 return; 
             }
             const store = dataStore[currentSport];
