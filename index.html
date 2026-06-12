@@ -29,7 +29,7 @@
             overflow-x: hidden;
             scrollbar-width: thin;
             scrollbar-color: #555 #1a1a1a;
-            touch-action: manipulation;
+            touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
 
             /* Prevent accidental pull-to-refresh unless the user is at the very top */
@@ -3908,13 +3908,15 @@
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
-        // === Strict Pull-to-Refresh Control ===
-        // Only allow native pull-to-refresh when the user is at the very top of the page
-        let touchStartY = 0;
+        // === Robust Pull-to-Refresh Prevention ===
+        // Only allow the native pull-to-refresh gesture when the user is at the very top
+        let lastTouchY = 0;
+        let isScrolling = false;
 
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length === 1) {
-                touchStartY = e.touches[0].clientY;
+                lastTouchY = e.touches[0].clientY;
+                isScrolling = false;
             }
         }, { passive: true });
 
@@ -3924,10 +3926,17 @@
             const currentY = e.touches[0].clientY;
             const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
 
-            // If user is pulling down (currentY > touchStartY) and not at the top, prevent refresh
-            if (currentY > touchStartY && scrollTop > 5) {
+            // Detect if user is trying to pull down
+            const isPullingDown = currentY > lastTouchY;
+
+            // Only block if:
+            // - User is pulling down
+            // - Not near the very top of the page
+            if (isPullingDown && scrollTop > 8) {
                 e.preventDefault();
             }
+
+            lastTouchY = currentY;
         }, { passive: false });
     </script>
 </body>
