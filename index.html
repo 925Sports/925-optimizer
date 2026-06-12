@@ -15,8 +15,8 @@
         }
 
         html {
-            /* Completely disable native pull-to-refresh.
-               We will auto-refresh data when the user returns to this tab/sheet instead. */
+            /* Disable ALL native pull-to-refresh behavior.
+               Refresh now only happens intentionally when user returns to the tab/sheet. */
             overscroll-behavior-y: none !important;
         }
         body {
@@ -34,7 +34,7 @@
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
 
-            /* Completely disable native pull-to-refresh */
+            /* Disable ALL native pull-to-refresh behavior */
             overscroll-behavior-y: none !important;
         }
         ::-webkit-scrollbar { width: 8px; }
@@ -487,9 +487,9 @@
                 overflow-y: auto;
             }
 
-            /* Main content area - prevent pull-to-refresh except at top */
+            /* Main content area — no pull-to-refresh (disabled at body/html level) */
             #content {
-                overscroll-behavior-y: contain;
+                overscroll-behavior-y: none;
             }
 
             /* Much smaller chart area on mobile (Wix iframe) */
@@ -3912,7 +3912,7 @@
 
         // =====================================================
         // Auto-refresh when user returns to this tab/sheet
-        // + Native pull-to-refresh is fully disabled via CSS
+        // Native pull-to-refresh is fully disabled via CSS above
         // =====================================================
         function initReturnRefresh() {
             let lastHiddenTime = Date.now();
@@ -3921,29 +3921,25 @@
                 if (document.visibilityState === 'visible') {
                     const timeAway = Date.now() - lastHiddenTime;
 
-                    // Only auto-refresh if user was away for more than 8 seconds
-                    // (prevents rapid flickering when quickly switching tabs)
+                    // Only auto-refresh if away for more than 8 seconds
                     if (timeAway > 8000) {
-                        console.log('[PrizePicks Optimizer] Tab returned — refreshing data...');
-                        
-                        // Show subtle indicator
+                        console.log('[PrizePicks Optimizer] Tab/sheet returned — refreshing data...');
+
                         const toast = document.createElement('div');
-                        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:8px 18px;border-radius:9999px;font-size:13px;z-index:99999;';
+                        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:8px 18px;border-radius:9999px;font-size:13px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
                         toast.textContent = 'Refreshing latest props...';
                         document.body.appendChild(toast);
 
-                        // Reload the prop data (reuses existing function)
                         if (typeof loadAllData === 'function') {
                             loadAllData().then(() => {
                                 setTimeout(() => {
                                     if (toast.parentNode) toast.parentNode.removeChild(toast);
-                                }, 600);
+                                }, 700);
                             }).catch(() => {
                                 if (toast.parentNode) toast.parentNode.removeChild(toast);
                             });
                         } else {
-                            // Fallback: hard reload if function not available
-                            setTimeout(() => location.reload(), 300);
+                            setTimeout(() => location.reload(), 400);
                         }
                     }
                 } else {
@@ -3951,26 +3947,22 @@
                 }
             });
 
-            // Also handle pageshow (some webviews / iOS Safari)
+            // Handle bfcache restore (iOS Safari, some webviews)
             window.addEventListener('pageshow', (event) => {
-                if (event.persisted) {
-                    // Page was restored from bfcache — refresh
-                    if (typeof loadAllData === 'function') {
-                        setTimeout(() => loadAllData(), 150);
-                    }
+                if (event.persisted && typeof loadAllData === 'function') {
+                    setTimeout(() => loadAllData(), 200);
                 }
             });
 
-            // Optional: refresh when window regains focus (extra safety for webviews)
+            // Extra safety for webviews when window regains focus
             window.addEventListener('focus', () => {
                 const timeAway = Date.now() - lastHiddenTime;
                 if (timeAway > 10000 && typeof loadAllData === 'function') {
-                    setTimeout(() => loadAllData(), 200);
+                    setTimeout(() => loadAllData(), 250);
                 }
             });
         }
 
-        // Initialize the return-to-tab refresh behavior
         initReturnRefresh();
     </script>
 </body>
