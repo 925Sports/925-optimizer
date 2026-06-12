@@ -464,10 +464,10 @@
                 padding: 10px 16px !important;
             }
 
-            /* Extra prominent bet buttons inside player popup on mobile */
+            /* Smaller bet buttons on mobile */
             #playerPopup.bottom-sheet .popup-buttons .button {
-                padding: 16px 28px !important;
-                font-size: 16px !important;
+                padding: 10px 20px !important;
+                font-size: 13px !important;
                 font-weight: 700;
             }
 
@@ -2689,7 +2689,15 @@
                     if (selected.choice === 'Less') lessC += ' selected selected-less';
                     else moreC += ' selected selected-more';
                 }
-                betDiv.innerHTML = `<button id="popLess" class="${lessC}" data-choice="Less">↓ Less</button><button id="popMore" class="${moreC}" data-choice="More">↑ More</button>`;
+                // Add divider like player cards (red/green dash in middle)
+                const btLower = (row['Bet Tag'] || '').toLowerCase();
+                const dividerClass = btLower.includes('more') || btLower.includes('over') || btLower.includes('↑') ? 'more' : 
+                                     (btLower.includes('less') || btLower.includes('under') || btLower.includes('↓') ? 'less' : '');
+                betDiv.innerHTML = `
+                    <button id="popLess" class="${lessC}" data-choice="Less">↓ Less</button>
+                    <div class="divider ${dividerClass}"></div>
+                    <button id="popMore" class="${moreC}" data-choice="More">↑ More</button>
+                `;
                 content.appendChild(betDiv);
 
                 setTimeout(() => {
@@ -2928,8 +2936,16 @@
 
                     const goodColor = 'rgba(34, 197, 94, 0.85)';
                     const badColor = 'rgba(239, 68, 68, 0.85)';
-                    const colors = last5.map(g => g.value > line ? goodColor : badColor)
-                        .concat(categories.map(c => c.average > line ? goodColor : badColor));
+                    const neutralColor = 'rgba(156, 163, 175, 0.85)'; // Grey for tie/exact match
+                    const colors = last5.map(g => {
+                        if (g.value > line) return goodColor;
+                        if (g.value < line) return badColor;
+                        return neutralColor;
+                    }).concat(categories.map(c => {
+                        if (c.average > line) return goodColor;
+                        if (c.average < line) return badColor;
+                        return neutralColor;
+                    }));
 
                     content.innerHTML = `
                         <div style="padding:8px 4px;">
