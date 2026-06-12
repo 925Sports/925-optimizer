@@ -27,6 +27,9 @@
             scrollbar-color: #555 #1a1a1a;
             touch-action: manipulation;
             -webkit-overflow-scrolling: touch;
+
+            /* Prevent accidental pull-to-refresh unless the user is at the very top */
+            overscroll-behavior-y: contain;
         }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1a1a; }
@@ -472,10 +475,15 @@
                 overscroll-behavior: contain;
             }
             #playerPopup.bottom-sheet #popupContent {
-                overscroll-behavior: contain;
+                overscroll-behavior-y: contain;
                 -webkit-overflow-scrolling: touch;
-                max-height: calc(96vh - 140px); /* Leave room for header + floating bar */
+                max-height: calc(96vh - 140px);
                 overflow-y: auto;
+            }
+
+            /* Main content area - prevent pull-to-refresh except at top */
+            #content {
+                overscroll-behavior-y: contain;
             }
 
             /* Much smaller chart area on mobile (Wix iframe) */
