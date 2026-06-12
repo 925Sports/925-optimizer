@@ -482,25 +482,16 @@
                 border-top: 1px solid #333;
             }
 
-            /* Smaller Floating Bet Bar on mobile */
-            #playerPopup.bottom-sheet .mobile-bet-bar {
+            /* Mobile bet buttons styling (inline from Overview) */
+            #playerPopup.bottom-sheet .popup-buttons {
                 position: sticky;
                 bottom: 0;
                 background: #1a1a1a;
-                padding: 5px 8px;
+                padding: 8px 0;
+                z-index: 20;
+                box-shadow: 0 -4px 12px rgba(0,0,0,0.5);
                 border-top: 1px solid #333;
-                z-index: 30;
-                box-shadow: 0 -3px 8px rgba(0,0,0,0.35);
-                display: flex;
-                gap: 6px;
-                justify-content: center;
-            }
-            #playerPopup.bottom-sheet .mobile-bet-bar .button {
-                flex: 1;
-                max-width: 130px;
-                padding: 8px 14px !important;
-                font-size: 12px !important;
-                font-weight: 700;
+                margin-top: 8px;
             }
         }
     </style>
@@ -2154,31 +2145,12 @@
                     popup.insertBefore(dragHandle, popup.firstChild);
                 }
 
-                // Add floating bet bar on mobile if not present
-                if (!popup.querySelector('.mobile-bet-bar')) {
-                    const betBar = document.createElement('div');
-                    betBar.className = 'mobile-bet-bar';
-                    betBar.innerHTML = `
-                        <button class="button less" id="mobileLessBtn">↓ Less</button>
-                        <button class="button more" id="mobileMoreBtn">↑ More</button>
-                    `;
-                    popup.appendChild(betBar);
+                // On mobile, ensure only the inline bet buttons from Overview are shown (no floating bar)
+                const existingFloating = popup.querySelector('.mobile-bet-bar');
+                if (existingFloating) existingFloating.remove();
 
-                    // Hide the original buttons inside Overview to avoid duplicates
-                    const originalButtons = popup.querySelector('.popup-buttons');
-                    if (originalButtons) originalButtons.style.display = 'none';
-
-                    setTimeout(() => {
-                        const lessBtn = popup.querySelector('#mobileLessBtn');
-                        const moreBtn = popup.querySelector('#mobileMoreBtn');
-                        const currentRowData = currentFiltered[currentRowIndex];
-
-                        if (lessBtn && currentRowData) lessBtn.onclick = () => toggleBet(currentRowData, 'Less', currentPopupSport);
-                        if (moreBtn && currentRowData) moreBtn.onclick = () => toggleBet(currentRowData, 'More', currentPopupSport);
-                    }, 50);
-                }
                 const inlineButtons = popup.querySelector('.popup-buttons');
-                if (inlineButtons) inlineButtons.style.display = 'none';
+                if (inlineButtons) inlineButtons.style.display = '';
 
                 // Trigger animation
                 requestAnimationFrame(() => {
