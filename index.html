@@ -55,6 +55,19 @@
             border-radius: 9999px;
             flex-wrap: wrap;
         }
+
+        /* Center sport tabs on desktop */
+        @media (min-width: 769px) {
+            .title-header {
+                position: relative;
+            }
+            .sport-tabs {
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                margin: 0;
+            }
+        }
         .sport-tab {
             padding: 8px 18px;
             border: none;
