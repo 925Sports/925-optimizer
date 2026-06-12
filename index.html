@@ -75,7 +75,7 @@
             }
         }
         .sport-tab {
-            padding: 8px 18px;
+            padding: 8px 16px;
             border: none;
             border-radius: 9999px;
             background: transparent;
@@ -84,6 +84,9 @@
             font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         .sport-tab.active {
             background: #7c3aed;
@@ -91,6 +94,35 @@
             box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
         }
         .sport-tab:hover:not(.active) { background: #222; color: #fff; }
+
+        .sport-tab .icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        /* Desktop-only sport hover effects (gradient style you liked) */
+        @media (min-width: 769px) {
+            .sport-tab[data-sport="nba"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(124,58,237,0.28), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(124,58,237,0.45);
+                color: #fff;
+            }
+            .sport-tab[data-sport="wnba"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(249,115,22,0.28), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(249,115,22,0.45);
+                color: #fff;
+            }
+            .sport-tab[data-sport="mlb"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(34,197,94,0.28), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(34,197,94,0.45);
+                color: #fff;
+            }
+            .sport-tab[data-sport="all"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(156,163,175,0.22), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(156,163,175,0.35);
+                color: #fff;
+            }
+        }
 
         .controls {
             display: flex;
@@ -628,10 +660,22 @@
 
         <!-- Sport Tabs -->
         <div class="sport-tabs" id="sportTabs">
-            <button class="sport-tab" data-sport="nba">NBA</button>
-            <button class="sport-tab" data-sport="wnba">WNBA</button>
-            <button class="sport-tab" data-sport="mlb">MLB</button>
-            <button class="sport-tab active" data-sport="all">All</button>
+            <button class="sport-tab" data-sport="nba">
+                <span class="icon">🏀</span>
+                <span>NBA</span>
+            </button>
+            <button class="sport-tab" data-sport="wnba">
+                <span class="icon">🏀</span>
+                <span>WNBA</span>
+            </button>
+            <button class="sport-tab" data-sport="mlb">
+                <span class="icon">⚾</span>
+                <span>MLB</span>
+            </button>
+            <button class="sport-tab active" data-sport="all">
+                <span class="icon">⋮⋮</span>
+                <span>All</span>
+            </button>
         </div>
 
         <!-- Subtle info for All tab (non-disruptive placement) -->
@@ -3810,9 +3854,10 @@
                 </div>
 
                 <!-- Tabs -->
-                <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
+                <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px; flex-wrap:wrap;">
                     <div id="tab-howto" class="tab active" style="padding:6px 16px; background:#22c55e; color:#000; border-radius:9999px; font-weight:600; cursor:pointer;">How to Use</div>
                     <div id="tab-edge" class="tab" style="padding:6px 16px; background:#333; color:#fff; border-radius:9999px; font-weight:600; cursor:pointer;">Understanding Edge %</div>
+                    <div id="tab-prizepicks-math" class="tab" style="padding:6px 16px; background:#333; color:#fff; border-radius:9999px; font-weight:600; cursor:pointer;">PrizePicks Math</div>
                 </div>
 
                 <!-- Content: How to Use -->
@@ -3859,6 +3904,57 @@
                         Consistently identifying and betting on +EV props is one of the most reliable ways to build an edge in prop betting and daily fantasy sports.
                     </p>
                 </div>
+
+                <!-- Content: PrizePicks Math -->
+                <div id="content-prizepicks-math" style="display:none; font-size:14px; line-height:1.6;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        
+                        <!-- Left: Slip EV Breakdown -->
+                        <div>
+                            <h4 style="color:#00ffcc; margin:0 0 10px;">PrizePicks Slip EV Breakdown</h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:12px;">
+                                Expected Value when projected to gain a longer-term edge over daily prop sites.
+                            </p>
+                            <div style="font-size:13px; line-height:1.7;">
+                                <div><strong>2 Pick Power Play</strong> (3X or +200): <span style="color:#22c55e;">Edge 57.5%</span> or -136.4</div>
+                                <div><strong>3 Pick Power Play</strong> (5X or +400): <span style="color:#22c55e;">Edge 58.5%</span> or -141</div>
+                                <div><strong>3 Pick Power Play</strong> (10X or +900): <span style="color:#22c55e;">Edge 56.2%</span> or -128.3</div>
+                                <div style="margin-top:8px;"><strong>3 Pick Flex</strong> (3/3 = 2.25X): <span style="color:#22c55e;">Edge 59.8%</span> or -148.8</div>
+                                <div><strong>4 Pick Flex</strong> (4/4 = 5X): <span style="color:#22c55e;">Edge 56.9%</span> or -132</div>
+                                <div><strong>5 Pick Flex</strong> (5/5 = 10X): <span style="color:#22c55e;">Edge 54.25%</span> or -118.6</div>
+                                <div><strong>6 Pick Flex</strong> (6/6 = 25X): <span style="color:#22c55e;">Edge 54.21%</span> or -118.4</div>
+                            </div>
+                        </div>
+
+                        <!-- Right: 6-Slip Win Rate Math -->
+                        <div>
+                            <h4 style="color:#00ffcc; margin:0 0 10px;">% Win Rate for 6 Slip Bets</h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:12px;">
+                                Breakeven and profitability at different win rates on 6-leg slips.
+                            </p>
+                            <table style="width:100%; font-size:13px; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background:#222;">
+                                        <th style="padding:6px 8px; text-align:left; border-bottom:1px solid #444;">Win Rate</th>
+                                        <th style="padding:6px 8px; text-align:right; border-bottom:1px solid #444;">EV</th>
+                                        <th style="padding:6px 8px; text-align:right; border-bottom:1px solid #444;">ROI</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">50.0%</td><td style="padding:5px 8px; text-align:right; color:#ef4444; border-bottom:1px solid #333;">-$32.81</td><td style="padding:5px 8px; text-align:right; color:#ef4444; border-bottom:1px solid #333;">-32.81%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">52.4%</td><td style="padding:5px 8px; text-align:right; color:#ef4444; border-bottom:1px solid #333;">-$15.43</td><td style="padding:5px 8px; text-align:right; color:#ef4444; border-bottom:1px solid #333;">-15.43%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">54.206%</td><td style="padding:5px 8px; text-align:right; border-bottom:1px solid #333;">$0.00</td><td style="padding:5px 8px; text-align:right; border-bottom:1px solid #333;">0%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">55%</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+$7.50</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+7.5%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">56%</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+$17.60</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+17.6%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">58%</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+$40.23</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+40.23%</td></tr>
+                                    <tr><td style="padding:5px 8px; border-bottom:1px solid #333;">60%</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+$66.41</td><td style="padding:5px 8px; text-align:right; color:#22c55e; border-bottom:1px solid #333;">+66.41%</td></tr>
+                                    <tr><td style="padding:5px 8px;">65%</td><td style="padding:5px 8px; text-align:right; color:#22c55e;">+$150.40</td><td style="padding:5px 8px; text-align:right; color:#22c55e;">+150.4%</td></tr>
+                                </tbody>
+                            </table>
+                            <p style="font-size:12px; color:#888; margin-top:10px;">Breakeven on 6-leg slips is approximately <strong>54.206%</strong> win rate.</p>
+                        </div>
+                    </div>
+                </div>
             `;
             document.body.appendChild(popup);
             document.getElementById('overlay').style.display = 'block';
@@ -3866,16 +3962,21 @@
             // Tab switching logic
             const tabHowto = popup.querySelector('#tab-howto');
             const tabEdge = popup.querySelector('#tab-edge');
+            const tabMath = popup.querySelector('#tab-prizepicks-math');
             const contentHowto = popup.querySelector('#content-howto');
             const contentEdge = popup.querySelector('#content-edge');
+            const contentMath = popup.querySelector('#content-prizepicks-math');
 
             tabHowto.onclick = () => {
                 tabHowto.style.background = '#22c55e';
                 tabHowto.style.color = '#000';
                 tabEdge.style.background = '#333';
                 tabEdge.style.color = '#fff';
+                tabMath.style.background = '#333';
+                tabMath.style.color = '#fff';
                 contentHowto.style.display = 'block';
                 contentEdge.style.display = 'none';
+                contentMath.style.display = 'none';
             };
 
             tabEdge.onclick = () => {
@@ -3883,8 +3984,23 @@
                 tabEdge.style.color = '#000';
                 tabHowto.style.background = '#333';
                 tabHowto.style.color = '#fff';
+                tabMath.style.background = '#333';
+                tabMath.style.color = '#fff';
                 contentHowto.style.display = 'none';
                 contentEdge.style.display = 'block';
+                contentMath.style.display = 'none';
+            };
+
+            tabMath.onclick = () => {
+                tabMath.style.background = '#22c55e';
+                tabMath.style.color = '#000';
+                tabHowto.style.background = '#333';
+                tabHowto.style.color = '#fff';
+                tabEdge.style.background = '#333';
+                tabEdge.style.color = '#fff';
+                contentHowto.style.display = 'none';
+                contentEdge.style.display = 'none';
+                contentMath.style.display = 'block';
             };
         }
 
