@@ -493,6 +493,25 @@
                 font-size: 18px;
             }
 
+            /* Premium page-turn / slide animations for player popup */
+            @keyframes slideInFromRight {
+                from { transform: translateX(40px); opacity: 0; }
+                to   { transform: translateX(0); opacity: 1; }
+            }
+
+            @keyframes slideInFromLeft {
+                from { transform: translateX(-40px); opacity: 0; }
+                to   { transform: translateX(0); opacity: 1; }
+            }
+
+            .popup-content-slide-right {
+                animation: slideInFromRight 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+            }
+
+            .popup-content-slide-left {
+                animation: slideInFromLeft 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+            }
+
             /* Larger touch targets on mobile */
             .button {
                 padding: 14px 20px !important;
@@ -507,6 +526,45 @@
                 padding: 10px 20px !important;
                 font-size: 13px !important;
                 font-weight: 700;
+            }
+
+            /* Professional Global Toast System */
+            .toast {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                background: #1f2937;
+                color: #f9fafb;
+                padding: 14px 20px;
+                border-radius: 12px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+                z-index: 9999;
+                max-width: 380px;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                opacity: 0;
+                transform: translateY(20px);
+                transition: all 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+                border-left: 4px solid #22c55e;
+            }
+            .toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            .toast.success { border-left-color: #22c55e; }
+            .toast.error { border-left-color: #ef4444; }
+            .toast.warning { border-left-color: #f59e0b; }
+            .toast.info { border-left-color: #3b82f6; }
+            .toast .toast-close {
+                margin-left: auto;
+                cursor: pointer;
+                font-size: 18px;
+                opacity: 0.7;
+            }
+            .toast .toast-close:hover {
+                opacity: 1;
             }
 
             /* Sticky Action Bar for mobile (More/Less buttons in popup) */
@@ -744,6 +802,48 @@
         const viewSelect = document.getElementById('viewSelect');
         const oddsToggle = document.getElementById('oddsToggle');
         const tabsDiv = document.getElementById('tabs');
+
+        // ==================== PROFESSIONAL TOAST SYSTEM ====================
+        function showToast(message, type = 'info') {
+            // Remove any existing toasts
+            document.querySelectorAll('.toast').forEach(t => t.remove());
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            let icon = '';
+            if (type === 'success') icon = '✅ ';
+            else if (type === 'error') icon = '❌ ';
+            else if (type === 'warning') icon = '⚠️ ';
+            else icon = 'ℹ️ ';
+
+            toast.innerHTML = `
+                <span>${icon}${message}</span>
+                <span class="toast-close">×</span>
+            `;
+            
+            document.body.appendChild(toast);
+
+            // Show with animation
+            requestAnimationFrame(() => {
+                toast.classList.add('show');
+            });
+
+            // Auto dismiss after 4 seconds
+            const autoDismiss = setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 300);
+                }
+            }, 4000);
+
+            // Close button
+            toast.querySelector('.toast-close').onclick = () => {
+                clearTimeout(autoDismiss);
+                toast.classList.remove('show');
+                setTimeout(() => toast.parentNode && toast.parentNode.removeChild(toast), 300);
+            };
+        }
 
         // ==================== UTILS ====================
         function normalizeName(name) {
@@ -2430,79 +2530,112 @@
                 };
             }
 
-            // === Tinder-style Swipe Gestures on entire Player Popup ===
-            // Horizontal: Left/Right = change player
-            // Vertical Up   = More + next player + toast
-            // Vertical Down = Less + next player + toast
+            // === Refined Mobile Gestures (Easy + Professional) ===
+            // Double-tap on header or main content → Add recommended bet
+            // Swipe down → Close bottom sheet
+            // Tap backdrop → Close popup
+            // Horizontal swipe → Change player
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-                let touchStartX = 0;
+                let lastTap = 0;
                 let touchStartY = 0;
-                let touchStartTime = 0;
 
-                const handleTouchStart = (e) => {
-                    touchStartX = e.changedTouches[0].screenX;
-                    touchStartY = e.changedTouches[0].screenY;
-                    touchStartTime = Date.now();
-                };
+                // Double-tap detection (only on header + main content, not deep scroll areas)
+                const doubleTapAreas = [popup.querySelector('.header'), popup.querySelector('#popupContent')].filter(Boolean);
 
-                const handleTouchEnd = (e) => {
-                    const touchEndX = e.changedTouches[0].screenX;
-                    const touchEndY = e.changedTouches[0].screenY;
-                    const touchEndTime = Date.now();
+                doubleTapAreas.forEach(area => {
+                    area.addEventListener('touchend', function(e) {
+                        const currentTime = new Date().getTime();
+                        const tapLength = currentTime - lastTap;
 
-                    const diffX = touchStartX - touchEndX;
-                    const diffY = touchStartY - touchEndY;
-                    const timeDiff = touchEndTime - touchStartTime;
+                        if (tapLength < 320 && tapLength > 0) {
+                            e.preventDefault();
 
-                    const absX = Math.abs(diffX);
-                    const absY = Math.abs(diffY);
-                    const velocity = (absX + absY) / Math.max(timeDiff, 1); // rough velocity
+                            const currentRow = currentFiltered[currentRowIndex];
+                            if (!currentRow) return;
 
-                    // === Horizontal Swipe (Left/Right player navigation) ===
-                    if (absX > absY && absX > 55) {
-                        if (diffX > 0) {
-                            // Swipe left → Next player
-                            if (currentRowIndex < currentFiltered.length - 1) {
-                                showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
-                            }
-                        } else {
-                            // Swipe right → Previous player
-                            if (currentRowIndex > 0) {
-                                showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
-                            }
+                            const betTag = (currentRow['Bet Tag'] || '').toLowerCase();
+                            const choice = (betTag.includes('more') || betTag.includes('over') || betTag.includes('↑')) ? 'More' : 'Less';
+
+                            toggleBet(currentRow, choice, currentPopupSport);
+                            showToast(`${currentRow['Player Name']} — ${currentRow['Stat Type']} ${choice} added`, 'success');
+
+                            if (navigator.vibrate) navigator.vibrate(20);
                         }
+                        lastTap = currentTime;
+                    }, { passive: false });
+                });
+
+                // Swipe down to close (on the whole popup)
+                popup.addEventListener('touchstart', function(e) {
+                    touchStartY = e.changedTouches[0].screenY;
+                }, { passive: true });
+
+                popup.addEventListener('touchend', function(e) {
+                    const touchEndY = e.changedTouches[0].screenY;
+                    const diffY = touchStartY - touchEndY;
+
+                    if (diffY < -110) {
+                        popup.classList.remove('show');
+                        setTimeout(() => {
+                            popup.style.display = 'none';
+                            document.getElementById('overlay').style.display = 'none';
+                            if (currentChart) { currentChart.destroy(); currentChart = null; }
+                        }, 280);
                         return;
                     }
 
-                    // === Vertical Swipe on the whole popup (Tinder-style) ===
-                    if (absY > absX * 1.4 && absY > 85 && velocity > 0.3) {
-                        const currentRow = currentFiltered[currentRowIndex];
-                        if (!currentRow) return;
+                    // === Premium Horizontal Swipe (Page-turn feel) ===
+                    const touchEndX = e.changedTouches[0].screenX;
+                    const diffX = popupTouchStartX - touchEndX;
 
-                        const playerName = currentRow['Player Name'];
-                        const statType = currentRow['Stat Type'];
-                        const choice = (diffY < 0) ? 'More' : 'Less';
+                    if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY)) {
+                        const popupContent = popup.querySelector('#popupContent') || popup;
 
-                        // Perform the bet
-                        toggleBet(currentRow, choice, currentPopupSport);
+                        if (diffX > 0) {
+                            // Swipe left → Next player (slide in from right)
+                            if (currentRowIndex < currentFiltered.length - 1) {
+                                popupContent.style.animation = 'none';
+                                void popupContent.offsetWidth; // trigger reflow
+                                popupContent.style.animation = 'slideInFromRight 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
-                        // Show confirmation toast
-                        showBetToast(`${playerName} — ${statType} ${choice} added`);
+                                setTimeout(() => {
+                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                                }, 80);
+                            }
+                        } else {
+                            // Swipe right → Previous player (slide in from left)
+                            if (currentRowIndex > 0) {
+                                popupContent.style.animation = 'none';
+                                void popupContent.offsetWidth;
+                                popupContent.style.animation = 'slideInFromLeft 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
-                        // Light haptic
-                        if (navigator.vibrate) navigator.vibrate(25);
-
-                        // Auto-advance to next player
-                        if (currentRowIndex < currentFiltered.length - 1) {
-                            setTimeout(() => {
-                                showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
-                            }, 350);
+                                setTimeout(() => {
+                                    showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
+                                }, 80);
+                            }
                         }
                     }
-                };
+                }, { passive: true });
 
-                popup.addEventListener('touchstart', handleTouchStart, { passive: true });
-                popup.addEventListener('touchend', handleTouchEnd, { passive: true });
+            }
+            
+            // Store touch start X globally for the popup (for horizontal swipe)
+            let popupTouchStartX = 0;
+            popup.addEventListener('touchstart', function(e) {
+                popupTouchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            // Tap backdrop to close
+            const overlayEl = document.getElementById('overlay');
+            if (overlayEl) {
+                overlayEl.onclick = () => {
+                    popup.classList.remove('show');
+                    setTimeout(() => {
+                        popup.style.display = 'none';
+                        overlayEl.style.display = 'none';
+                        if (currentChart) { currentChart.destroy(); currentChart = null; }
+                    }, 280);
+                };
             }
 
             // Toast notification for bet confirmation
@@ -2747,6 +2880,14 @@
                     <button id="popMore" class="${moreC}" data-choice="More">↑ More</button>
                 `;
                 content.appendChild(betDiv);
+
+                // Small visual hint for double-tap on mobile
+                if (window.innerWidth <= 768) {
+                    const hint = document.createElement('div');
+                    hint.style.cssText = 'text-align:center; font-size:11px; color:#888; margin-top:6px;';
+                    hint.textContent = 'Double-tap to quickly add the suggested bet';
+                    content.appendChild(hint);
+                }
 
                 setTimeout(() => {
                     const lessBtn = document.getElementById('popLess');
@@ -3300,7 +3441,7 @@
         // ==================== FILTER POPUPS ====================
         function showFilterPopup() {
             if (currentSport === 'all') { 
-                alert('Game/Team filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
+                showToast('Game/Team filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.', 'warning');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -3343,7 +3484,7 @@
 
         function showCalloutFilterPopup() {
             if (currentSport === 'all') { 
-                alert('Callout filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.');
+                showToast('Callout filters only work on individual sport tabs. Please click NBA, WNBA, or MLB first.', 'warning');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -3613,7 +3754,7 @@
 
         function placeBetOnPrizePicks() {
             if (selectedBets.length === 0) {
-                alert('No bets selected!');
+                showToast('No bets selected!', 'warning');
                 return;
             }
 
@@ -3627,7 +3768,7 @@
 
             navigator.clipboard.writeText(betText).then(() => {
                 window.open('https://prizepicks.com/', '_blank');
-                alert(`Bet slip copied to clipboard!\n\n${betText}\n\nPrizePicks has been opened in a new tab. Paste the legs there.`);
+                showToast('Bet slip copied to clipboard! PrizePicks opened in a new tab.', 'success');
             }).catch(() => {
                 prompt('Copy this bet slip:', betText);
                 window.open('https://prizepicks.com/', '_blank');
@@ -3668,6 +3809,16 @@
                         <li>Use <strong>Table view</strong> to quickly scan and sort by Edge, L5 Avg, or L20 metrics.</li>
                         <li>Focus first on props showing <strong>54%+ Edge</strong> for the best risk/reward.</li>
                     </ul>
+
+                    <h4 style="margin-top:20px; color:#00ffcc;">Mobile Tips</h4>
+                    <ul style="line-height:1.6; font-size:13.5px; padding-left:20px; color:#ddd;">
+                        <li><strong>Double-tap</strong> anywhere in the player popup (header or main area) to quickly add the recommended bet.</li>
+                        <li><strong>Swipe down</strong> on the popup to close it.</li>
+                        <li>Tap the dark background outside the popup to close it.</li>
+                        <li>Swipe left/right inside the popup to switch between players.</li>
+                        <li>Use the floating Less/More buttons at the bottom for manual selection.</li>
+                    </ul>
+
                     <p style="font-size:12px; color:#888; margin-top:16px;">
                         Data loaded from your local CSVs. Game logs enhance the popup but are optional.
                     </p>
