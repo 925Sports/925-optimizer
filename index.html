@@ -228,9 +228,26 @@
             outline: 2px solid #ef4444;
             outline-offset: -2px;
         }
-        .divider { position: absolute; top: 5px; bottom: 5px; left: 50%; width: 2px; background: #333; transform: translateX(-50%); z-index: 1; }
+        .divider { 
+            position: absolute; 
+            top: 6px; 
+            bottom: 6px; 
+            left: 50%; 
+            width: 2px; 
+            background: #444; 
+            transform: translateX(-50%); 
+            z-index: 2; 
+            border-radius: 1px;
+        }
         .divider.more { background: #22c55e; }
         .divider.less { background: #ef4444; }
+
+        /* Better divider in popup buttons */
+        .popup-buttons .divider {
+            top: 5px;
+            bottom: 5px;
+            width: 1.5px;
+        }
         .info-icon { position: absolute; top: 14px; right: 14px; cursor: pointer; font-size: 17px; color: var(--accent); transition: color 0.2s; }
         .info-icon:hover { color: var(--accent-dark); }
         .icon { position: absolute; top: 38px; right: 14px; font-size: 18px; }
@@ -330,7 +347,15 @@
         #closePlayerPopup { position: absolute; top: 12px; right: 16px; cursor: pointer; font-size: 26px; color: #f0f0f0; z-index: 320; }
         #closePlayerPopup:hover { color: #ef4444; }
 
-        .popup-buttons { display: flex; margin: 12px auto; background: #121212; border-radius: 9999px; overflow: hidden; width: fit-content; }
+        .popup-buttons { 
+            display: flex; 
+            margin: 12px auto; 
+            background: #121212; 
+            border-radius: 9999px; 
+            overflow: hidden; 
+            width: fit-content; 
+            position: relative; 
+        }
         .popup-buttons .button { padding: 8px 36px; font-size: 14px; font-weight: 700; }
 
         #chartContainer { margin: 16px 0; max-width: 100%; overflow-x: auto; }
