@@ -15,7 +15,9 @@
         }
 
         html {
-            overscroll-behavior-y: contain;
+            /* Completely disable native pull-to-refresh.
+               We will auto-refresh data when the user returns to this tab/sheet instead. */
+            overscroll-behavior-y: none !important;
         }
         body {
             margin: 0;
@@ -32,8 +34,8 @@
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
 
-            /* Prevent accidental pull-to-refresh unless the user is at the very top */
-            overscroll-behavior-y: contain;
+            /* Completely disable native pull-to-refresh */
+            overscroll-behavior-y: none !important;
         }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1a1a; }
@@ -3908,78 +3910,68 @@
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
-        // === Robust Pull-to-Refresh Prevention (Mobile) ===
-        // This version uses BOTH:
-        // 1. touchmove preventDefault() when not at top
-        // 2. Dynamic overscroll-behavior-y switching (very effective in iframes/webviews)
-        let touchStartY = 0;
-        let touchStartScrollTop = 0;
+        // =====================================================
+        // Auto-refresh when user returns to this tab/sheet
+        // + Native pull-to-refresh is fully disabled via CSS
+        // =====================================================
+        function initReturnRefresh() {
+            let lastHiddenTime = Date.now();
 
-        function updateOverscrollBehavior() {
-            const st = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-            const root = document.documentElement;
-            const bodyEl = document.body;
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    const timeAway = Date.now() - lastHiddenTime;
 
-            if (st > 30) {
-                // User has scrolled down — disable pull-to-refresh completely
-                root.style.overscrollBehaviorY = 'none';
-                bodyEl.style.overscrollBehaviorY = 'none';
-            } else {
-                // Near the top — allow native pull-to-refresh
-                root.style.overscrollBehaviorY = 'contain';
-                bodyEl.style.overscrollBehaviorY = 'contain';
-            }
+                    // Only auto-refresh if user was away for more than 8 seconds
+                    // (prevents rapid flickering when quickly switching tabs)
+                    if (timeAway > 8000) {
+                        console.log('[PrizePicks Optimizer] Tab returned — refreshing data...');
+                        
+                        // Show subtle indicator
+                        const toast = document.createElement('div');
+                        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:8px 18px;border-radius:9999px;font-size:13px;z-index:99999;';
+                        toast.textContent = 'Refreshing latest props...';
+                        document.body.appendChild(toast);
+
+                        // Reload the prop data (reuses existing function)
+                        if (typeof loadAllData === 'function') {
+                            loadAllData().then(() => {
+                                setTimeout(() => {
+                                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                                }, 600);
+                            }).catch(() => {
+                                if (toast.parentNode) toast.parentNode.removeChild(toast);
+                            });
+                        } else {
+                            // Fallback: hard reload if function not available
+                            setTimeout(() => location.reload(), 300);
+                        }
+                    }
+                } else {
+                    lastHiddenTime = Date.now();
+                }
+            });
+
+            // Also handle pageshow (some webviews / iOS Safari)
+            window.addEventListener('pageshow', (event) => {
+                if (event.persisted) {
+                    // Page was restored from bfcache — refresh
+                    if (typeof loadAllData === 'function') {
+                        setTimeout(() => loadAllData(), 150);
+                    }
+                }
+            });
+
+            // Optional: refresh when window regains focus (extra safety for webviews)
+            window.addEventListener('focus', () => {
+                const timeAway = Date.now() - lastHiddenTime;
+                if (timeAway > 10000 && typeof loadAllData === 'function') {
+                    setTimeout(() => loadAllData(), 200);
+                }
+            });
         }
 
-        function initPullToRefreshPrevention() {
-            // Initial state
-            updateOverscrollBehavior();
-
-            // Update on scroll (throttled)
-            let scrollTimeout;
-            window.addEventListener('scroll', function() {
-                clearTimeout(scrollTimeout);
-                scrollTimeout = setTimeout(updateOverscrollBehavior, 50);
-            }, { passive: true });
-
-            // Touch handling
-            document.addEventListener('touchstart', function(e) {
-                if (e.touches.length !== 1) return;
-                touchStartY = e.touches[0].clientY;
-                touchStartScrollTop = window.scrollY ||
-                                      document.documentElement.scrollTop ||
-                                      document.body.scrollTop || 0;
-                updateOverscrollBehavior(); // re-evaluate at start of gesture
-            }, { passive: true });
-
-            document.addEventListener('touchmove', function(e) {
-                if (e.touches.length !== 1) return;
-
-                const currentY = e.touches[0].clientY;
-                const deltaY = currentY - touchStartY;
-                const currentScrollTop = window.scrollY ||
-                                         document.documentElement.scrollTop ||
-                                         document.body.scrollTop || 0;
-
-                // Block pull gesture unless we started very close to the top
-                if (deltaY > 0 && touchStartScrollTop > 25) {
-                    e.preventDefault();
-                }
-                if (deltaY > 0 && currentScrollTop > 30) {
-                    e.preventDefault();
-                }
-            }, { passive: false, capture: true });
-
-            // Also update after orientation change / resize
-            window.addEventListener('resize', updateOverscrollBehavior);
-            window.addEventListener('orientationchange', updateOverscrollBehavior);
-        }
-
-        initPullToRefreshPrevention();
-        window.addEventListener('load', () => {
-            initPullToRefreshPrevention();
-            updateOverscrollBehavior();
-        });
+        // Initialize the return-to-tab refresh behavior
+        initReturnRefresh();
     </script>
 </body>
 </html>
