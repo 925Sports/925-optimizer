@@ -32,7 +32,7 @@
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
 
-            /* Prevent accidental pull-to-refresh unless the user is at the very top */
+            /* Contain overscroll so pull-to-refresh only triggers at true top (see JS handler) */
             overscroll-behavior-y: contain;
         }
         ::-webkit-scrollbar { width: 8px; }
@@ -194,6 +194,9 @@
             padding: 16px 24px;
             max-width: 1400px;
             margin: 0 auto;
+            /* Extra containment for mobile scrolling / embedded iframes */
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
         }
         #content.table-view { display: block; max-width: 100%; overflow-x: auto; }
         #content.table-view table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -3908,15 +3911,20 @@
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
-        // === Robust Pull-to-Refresh Prevention ===
-        // Only allow the native pull-to-refresh gesture when the user is at the very top
-        let lastTouchY = 0;
-        let isScrolling = false;
+        // === Robust Pull-to-Refresh Prevention (Mobile Only) ===
+        // Allow the browser's native pull-to-refresh ONLY when the user is genuinely
+        // at the very top of the tool (scrollTop near 0 when the gesture starts).
+        // This prevents accidental refreshes when the user is scrolling UP through
+        // the list of props (common complaint on mobile / in iframes / webviews).
+        let touchStartY = 0;
+        let touchStartScrollTop = 0;
 
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length === 1) {
-                lastTouchY = e.touches[0].clientY;
-                isScrolling = false;
+                touchStartY = e.touches[0].clientY;
+                touchStartScrollTop = window.scrollY ||
+                                      document.documentElement.scrollTop ||
+                                      document.body.scrollTop || 0;
             }
         }, { passive: true });
 
@@ -3924,19 +3932,22 @@
             if (e.touches.length !== 1) return;
 
             const currentY = e.touches[0].clientY;
-            const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            const deltaY = currentY - touchStartY;   // > 0 means finger moving DOWN (pull-down gesture)
+            const currentScrollTop = window.scrollY ||
+                                     document.documentElement.scrollTop ||
+                                     document.body.scrollTop || 0;
 
-            // Detect if user is trying to pull down
-            const isPullingDown = currentY > lastTouchY;
-
-            // Only block if:
-            // - User is pulling down
-            // - Not near the very top of the page
-            if (isPullingDown && scrollTop > 8) {
+            // Block pull-to-refresh unless the gesture STARTED at the very top.
+            // If user had already scrolled down even a little when they touched the screen,
+            // any downward pull should NOT trigger a refresh — it should just scroll normally.
+            if (deltaY > 0 && touchStartScrollTop > 8) {
                 e.preventDefault();
             }
 
-            lastTouchY = currentY;
+            // Extra safety net: if during the gesture we are clearly not at the top, block it.
+            if (deltaY > 0 && currentScrollTop > 12) {
+                e.preventDefault();
+            }
         }, { passive: false });
     </script>
 </body>
