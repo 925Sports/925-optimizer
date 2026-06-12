@@ -15,9 +15,7 @@
         }
 
         html {
-            /* Disable ALL native pull-to-refresh behavior.
-               Refresh now only happens intentionally when user returns to the tab/sheet. */
-            overscroll-behavior-y: none !important;
+            overscroll-behavior-y: contain;
         }
         body {
             margin: 0;
@@ -34,8 +32,8 @@
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
 
-            /* Disable ALL native pull-to-refresh behavior */
-            overscroll-behavior-y: none !important;
+            /* Prevent accidental pull-to-refresh unless the user is at the very top */
+            overscroll-behavior-y: contain;
         }
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #1a1a1a; }
@@ -77,7 +75,7 @@
             }
         }
         .sport-tab {
-            padding: 8px 18px;
+            padding: 8px 16px;
             border: none;
             border-radius: 9999px;
             background: transparent;
@@ -86,6 +84,9 @@
             font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         .sport-tab.active {
             background: #7c3aed;
@@ -93,6 +94,35 @@
             box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
         }
         .sport-tab:hover:not(.active) { background: #222; color: #fff; }
+
+        .sport-tab .icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        /* Desktop-only sport hover effects (stadium / court feel) */
+        @media (min-width: 769px) {
+            .sport-tab[data-sport="nba"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(124,58,237,0.25), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(124,58,237,0.4);
+                color: #fff;
+            }
+            .sport-tab[data-sport="wnba"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(249,115,22,0.25), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(249,115,22,0.4);
+                color: #fff;
+            }
+            .sport-tab[data-sport="mlb"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(34,197,94,0.25), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(34,197,94,0.4);
+                color: #fff;
+            }
+            .sport-tab[data-sport="all"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(156,163,175,0.2), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(156,163,175,0.3);
+                color: #fff;
+            }
+        }
 
         .controls {
             display: flex;
@@ -487,9 +517,9 @@
                 overflow-y: auto;
             }
 
-            /* Main content area — no pull-to-refresh (disabled at body/html level) */
+            /* Main content area - prevent pull-to-refresh except at top */
             #content {
-                overscroll-behavior-y: none;
+                overscroll-behavior-y: contain;
             }
 
             /* Much smaller chart area on mobile (Wix iframe) */
@@ -624,10 +654,22 @@
 
         <!-- Sport Tabs -->
         <div class="sport-tabs" id="sportTabs">
-            <button class="sport-tab" data-sport="nba">NBA</button>
-            <button class="sport-tab" data-sport="wnba">WNBA</button>
-            <button class="sport-tab" data-sport="mlb">MLB</button>
-            <button class="sport-tab active" data-sport="all">All</button>
+            <button class="sport-tab" data-sport="nba">
+                <span class="icon">🏀</span>
+                <span>NBA</span>
+            </button>
+            <button class="sport-tab" data-sport="wnba">
+                <span class="icon">🏀</span>
+                <span>WNBA</span>
+            </button>
+            <button class="sport-tab" data-sport="mlb">
+                <span class="icon">⚾</span>
+                <span>MLB</span>
+            </button>
+            <button class="sport-tab active" data-sport="all">
+                <span class="icon">⋮⋮</span>
+                <span>All</span>
+            </button>
         </div>
 
         <!-- Subtle info for All tab (non-disruptive placement) -->
@@ -3910,60 +3952,36 @@
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
-        // =====================================================
-        // Auto-refresh when user returns to this tab/sheet
-        // Native pull-to-refresh is fully disabled via CSS above
-        // =====================================================
-        function initReturnRefresh() {
-            let lastHiddenTime = Date.now();
+        // === Robust Pull-to-Refresh Prevention ===
+        // Only allow the native pull-to-refresh gesture when the user is at the very top
+        let lastTouchY = 0;
+        let isScrolling = false;
 
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    const timeAway = Date.now() - lastHiddenTime;
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                lastTouchY = e.touches[0].clientY;
+                isScrolling = false;
+            }
+        }, { passive: true });
 
-                    // Only auto-refresh if away for more than 8 seconds
-                    if (timeAway > 8000) {
-                        console.log('[PrizePicks Optimizer] Tab/sheet returned — refreshing data...');
+        document.addEventListener('touchmove', function(e) {
+            if (e.touches.length !== 1) return;
 
-                        const toast = document.createElement('div');
-                        toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:8px 18px;border-radius:9999px;font-size:13px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.4);';
-                        toast.textContent = 'Refreshing latest props...';
-                        document.body.appendChild(toast);
+            const currentY = e.touches[0].clientY;
+            const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
 
-                        if (typeof loadAllData === 'function') {
-                            loadAllData().then(() => {
-                                setTimeout(() => {
-                                    if (toast.parentNode) toast.parentNode.removeChild(toast);
-                                }, 700);
-                            }).catch(() => {
-                                if (toast.parentNode) toast.parentNode.removeChild(toast);
-                            });
-                        } else {
-                            setTimeout(() => location.reload(), 400);
-                        }
-                    }
-                } else {
-                    lastHiddenTime = Date.now();
-                }
-            });
+            // Detect if user is trying to pull down
+            const isPullingDown = currentY > lastTouchY;
 
-            // Handle bfcache restore (iOS Safari, some webviews)
-            window.addEventListener('pageshow', (event) => {
-                if (event.persisted && typeof loadAllData === 'function') {
-                    setTimeout(() => loadAllData(), 200);
-                }
-            });
+            // Only block if:
+            // - User is pulling down
+            // - Not near the very top of the page
+            if (isPullingDown && scrollTop > 8) {
+                e.preventDefault();
+            }
 
-            // Extra safety for webviews when window regains focus
-            window.addEventListener('focus', () => {
-                const timeAway = Date.now() - lastHiddenTime;
-                if (timeAway > 10000 && typeof loadAllData === 'function') {
-                    setTimeout(() => loadAllData(), 250);
-                }
-            });
-        }
-
-        initReturnRefresh();
+            lastTouchY = currentY;
+        }, { passive: false });
     </script>
 </body>
 </html>
