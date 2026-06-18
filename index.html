@@ -117,6 +117,11 @@
                 box-shadow: 0 0 0 1px rgba(34,197,94,0.4);
                 color: #fff;
             }
+            .sport-tab[data-sport="soccer"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(16,185,129,0.25), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(16,185,129,0.4);
+                color: #fff;
+            }
             .sport-tab[data-sport="all"]:hover:not(.active) {
                 background: linear-gradient(145deg, rgba(156,163,175,0.2), #1a1a1a);
                 box-shadow: 0 0 0 1px rgba(156,163,175,0.3);
@@ -309,6 +314,7 @@
         .sport-badge.nba { background: #7c3aed; }
         .sport-badge.wnba { background: #f97316; }
         .sport-badge.mlb { background: #22c55e; }
+        .sport-badge.soccer { background: #10b981; } /* emerald green for soccer */
 
         /* Sport-colored headshot ring (lighter shades) - replaces text badge */
         .headshot-wrapper {
@@ -322,6 +328,7 @@
         .headshot-wrapper.nba { background: rgba(124, 58, 237, 0.35); }   /* darker/more transparent purple */
         .headshot-wrapper.wnba { background: rgba(249, 115, 22, 0.35); }  /* darker/more transparent orange */
         .headshot-wrapper.mlb { background: rgba(34, 197, 94, 0.35); }   /* darker/more transparent green */
+        .headshot-wrapper.soccer { background: rgba(16, 185, 129, 0.35); } /* emerald */
 
         .headshot-wrapper .headshot {
             width: 100%;
@@ -666,6 +673,10 @@
                 <span class="icon">⚾</span>
                 <span>MLB</span>
             </button>
+            <button class="sport-tab" data-sport="soccer">
+                <span class="icon">⚽</span>
+                <span>Soccer</span>
+            </button>
             <button class="sport-tab active" data-sport="all">
                 <span class="icon">⋮⋮</span>
                 <span>All</span>
@@ -840,7 +851,8 @@
         let dataStore = {
             nba: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
             wnba: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            mlb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
+            mlb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            soccer: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
         };
         let selectedBets = []; // SHARED across all sports
         let currentFiltered = [];
@@ -972,6 +984,30 @@
                     }
                 }
                 return 0;
+            } else if (sport === 'soccer') {
+                // Soccer stats from prop CSV or future game logs
+                const lowerStat = s;
+                if (lowerStat.includes('fantasy score') && lowerStat.includes('outfield')) {
+                    return parseFloat(log['Outfield Fantasy Score'] || log.outfieldFantasyScore || log['OutfieldFantasyScore'] || 0);
+                }
+                if (lowerStat.includes('fantasy score') && (lowerStat.includes('goalie') || lowerStat.includes('goalkeeper'))) {
+                    return parseFloat(log['Goalie Fantasy Score'] || log.goalieFantasyScore || log['GoalieFantasyScore'] || 0);
+                }
+                if (lowerStat.includes('shot') && !lowerStat.includes('on target')) return parseFloat(log.Shots || log.shots || log['Shots'] || 0);
+                if (lowerStat.includes('shots on target')) return parseFloat(log['Shots On Target'] || log.shotsOnTarget || log['ShotsOnTarget'] || 0);
+                if (lowerStat.includes('goalie save') || lowerStat.includes('saves')) return parseFloat(log['Goalie Saves'] || log.saves || log['GoalieSaves'] || 0);
+                if (lowerStat.includes('pass') && lowerStat.includes('attempt')) return parseFloat(log['Passes Attempted'] || log.passesAttempted || log['PassesAttempted'] || 0);
+                if (lowerStat.includes('dribbl')) return parseFloat(log['Attempted Dribbles'] || log.dribbles || log['AttemptedDribbles'] || 0);
+                if (lowerStat.includes('clearance')) return parseFloat(log.Clearances || log.clearances || log['Clearances'] || 0);
+                if (lowerStat.includes('cross')) return parseFloat(log.Crosses || log.crosses || log['Crosses'] || 0);
+                if (lowerStat.includes('foul') && !lowerStat.includes('drawn')) return parseFloat(log.Fouls || log.fouls || log['Fouls'] || 0);
+                if (lowerStat.includes('foul') && lowerStat.includes('drawn')) return parseFloat(log['Fouls Drawn'] || log.foulsDrawn || log['FoulsDrawn'] || 0);
+                if (lowerStat.includes('tackle')) return parseFloat(log.Tackles || log.tackles || log['Tackles'] || 0);
+                if (lowerStat.includes('goal') && !lowerStat.includes('allowed')) return parseFloat(log.Goals || log.goals || log['Goals'] || 0);
+                if (lowerStat.includes('goal') && lowerStat.includes('allowed')) return parseFloat(log['Goals Allowed'] || log.goalsAllowed || log['GoalsAllowed'] || 0);
+                if (lowerStat.includes('assist')) return parseFloat(log['Shots Assisted'] || log.shotsAssisted || log['ShotsAssisted'] || 0);
+                // Fallback
+                return parseFloat(log[statType] || log[statType.toUpperCase()] || log[lowerStat.replace(/\s+/g, '')] || 0) || 0;
             } else {
                 // NBA / WNBA
                 if (s.includes('point') && !s.includes('+')) return parseFloat(log.PTS || log.points || 0);
@@ -1073,6 +1109,10 @@
                 mlb: { 
                     pp: './data/prizepicks-mlb.csv', 
                     logs: 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/main/mlb_2026_season_game_logs.csv' 
+                },
+                soccer: { 
+                    pp: './data/prizepicks-soccer.csv', 
+                    logs: ''  // No game logs CSV yet for soccer; Splits/Game Log tabs will show placeholder
                 }
             };
 
@@ -1080,22 +1120,24 @@
                 const results = await Promise.allSettled([
                     fetch(urls.nba.pp).then(r => r.ok ? r.text() : Promise.reject('NBA CSV missing')),
                     fetch(urls.wnba.pp).then(r => r.ok ? r.text() : Promise.reject('WNBA CSV missing')),
-                    fetch(urls.mlb.pp).then(r => r.ok ? r.text() : Promise.reject('MLB CSV missing'))
+                    fetch(urls.mlb.pp).then(r => r.ok ? r.text() : Promise.reject('MLB CSV missing')),
+                    fetch(urls.soccer.pp).then(r => r.ok ? r.text() : Promise.reject('Soccer CSV missing'))
                 ]);
 
-                const [nbaRes, wnbaRes, mlbRes] = results;
+                const [nbaRes, wnbaRes, mlbRes, soccerRes] = results;
 
                 if (nbaRes.status === 'fulfilled') dataStore.nba.allData = Papa.parse(nbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (wnbaRes.status === 'fulfilled') dataStore.wnba.allData = Papa.parse(wnbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (mlbRes.status === 'fulfilled') dataStore.mlb.allData = Papa.parse(mlbRes.value, { header: true, skipEmptyLines: true }).data;
+                if (soccerRes.status === 'fulfilled') dataStore.soccer.allData = Papa.parse(soccerRes.value, { header: true, skipEmptyLines: true }).data;
 
                 // Ensure odds type defaults to Standard on load
-                ['nba', 'wnba', 'mlb'].forEach(s => {
+                ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                     if (!dataStore[s].currentOddsType) dataStore[s].currentOddsType = 'standard';
                 });
 
                 // Prepare each sport
-                ['nba', 'wnba', 'mlb'].forEach(sport => prepareSportData(sport));
+                ['nba', 'wnba', 'mlb', 'soccer'].forEach(sport => prepareSportData(sport));
 
                 // Restore selectedBets from localStorage if any
                 try {
@@ -1266,7 +1308,7 @@
 
             // Recompute current filtered count (lightweight)
             let allRows = [];
-            ['nba', 'wnba', 'mlb'].forEach(s => {
+            ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
                     allRows.push({ ...row, _sport: s });
                 });
@@ -1310,7 +1352,7 @@
             if (isAll) {
                 // Combine data from all sports for stat type tabs on "All" view
                 data = [];
-                ['nba', 'wnba', 'mlb'].forEach(s => {
+                ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                     if (dataStore[s] && dataStore[s].allData) {
                         data = data.concat(dataStore[s].allData);
                     }
@@ -1960,6 +2002,7 @@
             if (sport === 'nba') headshotRingClass = 'nba';
             else if (sport === 'wnba') headshotRingClass = 'wnba';
             else if (sport === 'mlb') headshotRingClass = 'mlb';
+            else if (sport === 'soccer') headshotRingClass = 'soccer';
 
             const key = `${playerName}-${statType}`;
             const selected = selectedBets.find(b => b.key === key && b.sport === sport);
@@ -2069,7 +2112,7 @@
             contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
             let allRows = [];
-            ['nba', 'wnba', 'mlb'].forEach(s => {
+            ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
                     allRows.push({ ...row, _sport: s });
                 });
@@ -3085,6 +3128,15 @@
                 }, 60);
 
             } else if (tab === 'Splits') {
+                if (sport === 'soccer') {
+                    content.innerHTML = `
+                        <div style="padding:24px 16px; text-align:center; color:#888; max-width:420px; margin:0 auto;">
+                            <div style="font-size:15px; font-weight:600; color:#ccc; margin-bottom:8px;">📊 Splits &amp; Charts for Soccer</div>
+                            <p style="font-size:13px; line-height:1.5;">Historical game logs and advanced splits (L5/L10 hit rates, vs Opp, Home/Away, etc.) are coming soon for Soccer props.<br><br>Check back after we add soccer game log CSVs — they will power the same rich charts as NBA/MLB!</p>
+                        </div>
+                    `;
+                    return;
+                }
                 if (sport === 'nba') {
                     // ========== FULL RICH NBA SPLITS CHART (matching your original NBA tool + desired image) ==========
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
