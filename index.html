@@ -53,6 +53,12 @@
             flex-wrap: wrap;
             gap: 12px;
         }
+        
+        @media (min-width: 769px) {
+            .title-header {
+                flex-wrap: nowrap;
+            }
+        }
         .title-header h1 { margin: 0; font-size: 22px; font-weight: 700; }
         .sport-tabs {
             display: flex;
@@ -63,15 +69,31 @@
             flex-wrap: wrap;
         }
 
-        /* Center sport tabs on desktop (cleaner method) */
+        /* True centering of sport tabs on desktop (matches reference screenshot) */
         @media (min-width: 769px) {
             .title-header {
-                justify-content: space-between;
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                align-items: center;
+                gap: 20px;
             }
             
+            /* Logo group stays on the left */
+            .title-header > div:first-child {
+                grid-column: 1;
+            }
+            
+            /* Sport tabs perfectly centered */
             .sport-tabs {
-                margin: 0 auto;
-                flex-shrink: 0;
+                grid-column: 2;
+                justify-self: center;
+                margin: 0;
+            }
+            
+            /* How to use button on the right */
+            .title-header > button:last-child {
+                grid-column: 3;
+                justify-self: end;
             }
         }
         .sport-tab {
@@ -105,14 +127,15 @@
         }
         .sport-tab:hover:not(.active) { background: #222; color: #fff; }
 
-        /* Consolidated icon alignment for all sport tabs */
         .sport-tab .icon {
-            font-size: 16px;
+            font-size: 18px;
             line-height: 1;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             vertical-align: middle;
+            font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+            min-width: 22px;
         }
 
         /* Desktop-only sport hover effects (stadium / court feel) */
@@ -703,7 +726,16 @@
             <span id="allTabInfoText"></span>
         </div>
 
-        <button onclick="showToolInfo()" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:9999px;font-size:12px;cursor:pointer;">How to use</button>
+        <!-- Right side: Bet count + How to use -->
+        <div style="display:flex; align-items:center; gap:12px; margin-left:auto;">
+            <div id="standardBetsCount" style="background:#1f2937; color:#9ca3af; font-size:12px; padding:4px 12px; border-radius:9999px; white-space:nowrap;">
+                <span id="standardBetsNumber">724</span> Standard bets
+            </div>
+            <button onclick="showToolInfo()" 
+                    style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:9999px;font-size:12px;cursor:pointer; display:flex; align-items:center; gap:6px;">
+                ⚙️ <span>How to use</span>
+            </button>
+        </div>
     </div>
 
     <!-- Controls -->
@@ -1543,6 +1575,70 @@
                 }
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
+                // ============================================
+                // SPECIAL CASE FOR SOCCER — very permissive
+                // Soccer data is lighter (only essentials). Show almost everything
+                // unless user applies search or "Selected Only".
+                // ============================================
+                if (currentSport === 'soccer') {
+                    // Start fresh from all soccer data
+                    filtered = store.allData.filter(row => (row['Player Name'] || '').trim() !== '');
+
+                    // Only apply light filters for Soccer
+                    const term = (searchInput.value || '').toLowerCase().trim();
+                    if (term) {
+                        filtered = filtered.filter(row =>
+                            (row['Player Name'] || '').toLowerCase().includes(term) ||
+                            (row['Stat Type'] || '').toLowerCase().includes(term)
+                        );
+                    }
+
+                    // Odds type (Standard / Demon / Goblin)
+                    const oddsVal = (document.getElementById('oddsSelect')?.value || 'standard').toLowerCase();
+                    if (oddsVal !== 'all') {
+                        filtered = filtered.filter(row => (row['Odds Type'] || 'standard').toLowerCase() === oddsVal);
+                    }
+
+                    // Selected Only (from Bet Slips)
+                    if (store.showSelectedOnly) {
+                        const selectedKeys = new Set(
+                            selectedBets.filter(b => b.sport === 'soccer').map(b => b.key)
+                        );
+                        filtered = filtered.filter(row =>
+                            selectedKeys.has(`${row['Player Name']}-${row['Stat Type']}`)
+                        );
+                    }
+
+                    // Sort by Edge % desc
+                    filtered.sort((a, b) => (parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0)));
+
+                    currentFiltered = filtered;
+
+                    // Render and exit early
+                    contentDiv.innerHTML = '';
+                    contentDiv.className = store.currentView === 'table' ? 'table-view' : '';
+
+                    if (filtered.length === 0) {
+                        contentDiv.innerHTML = '<div class="loading">No soccer props match your current search / selected bets.</div>';
+                        return;
+                    }
+
+                    if (store.currentView === 'cards') {
+                        filtered.forEach((row, index) => {
+                            const card = createPlayerCard(row, index, currentSport);
+                            contentDiv.appendChild(card);
+                        });
+                    } else {
+                        // Simple table fallback for Soccer (reuse existing table logic if needed)
+                        // For now fall back to cards if table has issues
+                        filtered.forEach((row, index) => {
+                            const card = createPlayerCard(row, index, currentSport);
+                            contentDiv.appendChild(card);
+                        });
+                    }
+                    return; // ← important: skip all the heavy NBA/MLB-style filters below
+                }
+
                 // Multi-select Stat Type filter
                 if (store.selectedStatTypes.size > 0) {
                     filtered = filtered.filter(row => store.selectedStatTypes.has((row['Stat Type'] || '').trim()));
@@ -1571,38 +1667,29 @@
                     return gameOk && teamOk && calloutOk;
                 });
 
-                // Soccer-specific: very permissive filtering (user request)
-                // Only require that the prop has either a Bet Tag OR a positive Edge %
-                // Placed early so it runs before stricter Bet Tag / Game Type filters
-                if (currentSport === 'soccer') {
-                    filtered = filtered.filter(row => {
-                        const betTag = (row['Bet Tag'] || '').trim();
-                        const edge = parseFloat(row['Edge %'] || row['Edge % Over'] || row['Edge % Under'] || 0);
-                        return betTag !== '' || edge > 0;
-                    });
-                }
-
-                // Advanced filters
-                if (store.selectedBetTags.size > 0) {
+                // Advanced filters (skip for soccer since we handled it earlier with permissive logic)
+                if (store.selectedBetTags.size > 0 && currentSport !== 'soccer') {
                     filtered = filtered.filter(row => store.selectedBetTags.has((row['Bet Tag'] || '').trim()));
                 }
-                if (store.selectedFav.size > 0) {
-                    filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
-                }
-                if (store.selectedGameTypes.size > 0) {
-                    filtered = filtered.filter(row => {
-                        const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
-                        let type = 'Normal';
-                        if (ou >= 9.6) type = 'High';
-                        else if (ou <= 8.4) type = 'Low';
-                        return store.selectedGameTypes.has(type);
-                    });
-                }
-                if (store.selectedHotCold.size > 0) {
-                    filtered = filtered.filter(row => {
-                        const status = getHotColdStatus(row['Player Name'], currentSport);
-                        return store.selectedHotCold.has(status);
-                    });
+                if (currentSport !== 'soccer') {
+                    if (store.selectedFav.size > 0) {
+                        filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
+                    }
+                    if (store.selectedGameTypes.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
+                            let type = 'Normal';
+                            if (ou >= 9.6) type = 'High';
+                            else if (ou <= 8.4) type = 'Low';
+                            return store.selectedGameTypes.has(type);
+                        });
+                    }
+                    if (store.selectedHotCold.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const status = getHotColdStatus(row['Player Name'], currentSport);
+                            return store.selectedHotCold.has(status);
+                        });
+                    }
                 }
 
                 if (store.showSelectedOnly) {
