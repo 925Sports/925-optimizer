@@ -105,8 +105,9 @@
         }
         .sport-tab:hover:not(.active) { background: #222; color: #fff; }
 
+        /* Consolidated icon alignment for all sport tabs */
         .sport-tab .icon {
-            font-size: 15px;
+            font-size: 16px;
             line-height: 1;
             display: inline-flex;
             align-items: center;
@@ -1570,19 +1571,20 @@
                     return gameOk && teamOk && calloutOk;
                 });
 
-                // Advanced filters
-                if (store.selectedBetTags.size > 0) {
-                    filtered = filtered.filter(row => store.selectedBetTags.has((row['Bet Tag'] || '').trim()));
-                }
-
                 // Soccer-specific: very permissive filtering (user request)
                 // Only require that the prop has either a Bet Tag OR a positive Edge %
+                // Placed early so it runs before stricter Bet Tag / Game Type filters
                 if (currentSport === 'soccer') {
                     filtered = filtered.filter(row => {
                         const betTag = (row['Bet Tag'] || '').trim();
-                        const edge = parseFloat(row['Edge %'] || 0);
+                        const edge = parseFloat(row['Edge %'] || row['Edge % Over'] || row['Edge % Under'] || 0);
                         return betTag !== '' || edge > 0;
                     });
+                }
+
+                // Advanced filters
+                if (store.selectedBetTags.size > 0) {
+                    filtered = filtered.filter(row => store.selectedBetTags.has((row['Bet Tag'] || '').trim()));
                 }
                 if (store.selectedFav.size > 0) {
                     filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
