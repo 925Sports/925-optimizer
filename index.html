@@ -1586,70 +1586,6 @@
                 }
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
-                // ============================================
-                // SPECIAL CASE FOR SOCCER — very permissive
-                // Soccer data is lighter (only essentials). Show almost everything
-                // unless user applies search or "Selected Only".
-                // ============================================
-                if (currentSport === 'soccer') {
-                    // Start fresh from all soccer data
-                    filtered = store.allData.filter(row => (row['Player Name'] || '').trim() !== '');
-
-                    // Only apply light filters for Soccer
-                    const term = (searchInput.value || '').toLowerCase().trim();
-                    if (term) {
-                        filtered = filtered.filter(row =>
-                            (row['Player Name'] || '').toLowerCase().includes(term) ||
-                            (row['Stat Type'] || '').toLowerCase().includes(term)
-                        );
-                    }
-
-                    // Odds type (Standard / Demon / Goblin)
-                    const oddsVal = (document.getElementById('oddsSelect')?.value || 'standard').toLowerCase();
-                    if (oddsVal !== 'all') {
-                        filtered = filtered.filter(row => (row['Odds Type'] || 'standard').toLowerCase() === oddsVal);
-                    }
-
-                    // Selected Only (from Bet Slips)
-                    if (store.showSelectedOnly) {
-                        const selectedKeys = new Set(
-                            selectedBets.filter(b => b.sport === 'soccer').map(b => b.key)
-                        );
-                        filtered = filtered.filter(row =>
-                            selectedKeys.has(`${row['Player Name']}-${row['Stat Type']}`)
-                        );
-                    }
-
-                    // Sort by Edge % desc
-                    filtered.sort((a, b) => (parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0)));
-
-                    currentFiltered = filtered;
-
-                    // Render and exit early
-                    contentDiv.innerHTML = '';
-                    contentDiv.className = store.currentView === 'table' ? 'table-view' : '';
-
-                    if (filtered.length === 0) {
-                        contentDiv.innerHTML = '<div class="loading">No soccer props match your current search / selected bets.</div>';
-                        return;
-                    }
-
-                    if (store.currentView === 'cards') {
-                        filtered.forEach((row, index) => {
-                            const card = createPlayerCard(row, index, currentSport);
-                            contentDiv.appendChild(card);
-                        });
-                    } else {
-                        // Simple table fallback for Soccer (reuse existing table logic if needed)
-                        // For now fall back to cards if table has issues
-                        filtered.forEach((row, index) => {
-                            const card = createPlayerCard(row, index, currentSport);
-                            contentDiv.appendChild(card);
-                        });
-                    }
-                    return; // ← important: skip all the heavy NBA/MLB-style filters below
-                }
-
                 // Multi-select Stat Type filter
                 if (store.selectedStatTypes.size > 0) {
                     filtered = filtered.filter(row => store.selectedStatTypes.has((row['Stat Type'] || '').trim()));
@@ -1678,29 +1614,27 @@
                     return gameOk && teamOk && calloutOk;
                 });
 
-                // Advanced filters (skip for soccer since we handled it earlier with permissive logic)
-                if (store.selectedBetTags.size > 0 && currentSport !== 'soccer') {
+                // Advanced filters (now applied to all sports including soccer)
+                if (store.selectedBetTags.size > 0) {
                     filtered = filtered.filter(row => store.selectedBetTags.has((row['Bet Tag'] || '').trim()));
                 }
-                if (currentSport !== 'soccer') {
-                    if (store.selectedFav.size > 0) {
-                        filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
-                    }
-                    if (store.selectedGameTypes.size > 0) {
-                        filtered = filtered.filter(row => {
-                            const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
-                            let type = 'Normal';
-                            if (ou >= 9.6) type = 'High';
-                            else if (ou <= 8.4) type = 'Low';
-                            return store.selectedGameTypes.has(type);
-                        });
-                    }
-                    if (store.selectedHotCold.size > 0) {
-                        filtered = filtered.filter(row => {
-                            const status = getHotColdStatus(row['Player Name'], currentSport);
-                            return store.selectedHotCold.has(status);
-                        });
-                    }
+                if (store.selectedFav.size > 0) {
+                    filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
+                }
+                if (store.selectedGameTypes.size > 0) {
+                    filtered = filtered.filter(row => {
+                        const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
+                        let type = 'Normal';
+                        if (ou >= 9.6) type = 'High';
+                        else if (ou <= 8.4) type = 'Low';
+                        return store.selectedGameTypes.has(type);
+                    });
+                }
+                if (store.selectedHotCold.size > 0) {
+                    filtered = filtered.filter(row => {
+                        const status = getHotColdStatus(row['Player Name'], currentSport);
+                        return store.selectedHotCold.has(status);
+                    });
                 }
 
                 if (store.showSelectedOnly) {
@@ -2194,19 +2128,24 @@
             const key = `${playerName}-${statType}`;
             const existingIndex = selectedBets.findIndex(b => b.key === key && b.sport === sport);
 
+            // Safer edge/prob calculation + robust ID fallbacks (helps soccer + any CSV with different headers)
+            let edgeVal = parseFloat(row['Edge %'] || row.Edge || row['edge'] || 50);
+            if (isNaN(edgeVal) || edgeVal <= 0) edgeVal = 50;
+            const safeProb = Math.min(Math.max(edgeVal / 100, 0.01), 0.99);
+
             const betData = {
                 key,
                 player: playerName,
                 choice,
                 line: row['Line Score'] || row.Line,
                 stat: statType,
-                edge: parseFloat(row['Edge %']) || 0,
-                prob: parseFloat(row['Edge %'] || 50) / 100,
-                game: row['Game Short Title'] || row.Game,
+                edge: edgeVal,
+                prob: safeProb,
+                game: row['Game Short Title'] || row.Game || row.Match || row.Fixture || 'Mixed',
                 team: row.Team,
                 sport: sport,
-                id: row.id || '',
-                projectionId: row['Data ID'] || row.id || ''
+                id: row.id || row.ID || row['Data ID'] || row['Player ID'] || '',
+                projectionId: row['Data ID'] || row['Projection ID'] || row.id || row.ID || ''
             };
 
             if (existingIndex > -1) {
@@ -3285,7 +3224,7 @@
                     content.innerHTML = `
                         <div style="padding:24px 16px; text-align:center; color:#888; max-width:420px; margin:0 auto;">
                             <div style="font-size:15px; font-weight:600; color:#ccc; margin-bottom:8px;">📊 Splits &amp; Charts for Soccer</div>
-                            <p style="font-size:13px; line-height:1.5;">Historical game logs and advanced splits (L5/L10 hit rates, vs Opp, Home/Away, etc.) are coming soon for Soccer props.<br><br>Check back after we add soccer game log CSVs — they will power the same rich charts as NBA/MLB!</p>
+                            <p style="font-size:13px; line-height:1.5;">Game logs and advanced splits (L5/L10 hit rates, vs Opp, Home/Away, charts, etc.) are <strong>not currently available</strong> for Soccer props in this tool.<br><br>Only daily prop data from your CSV is shown for soccer. Historical performance analysis requires game log CSVs which are not loaded for soccer at this time.</p>
                         </div>
                     `;
                     return;
@@ -3683,7 +3622,8 @@
                 }
             }
 
-            if (!rawValue || rawValue === '' || rawValue.toLowerCase() === 'null') {
+            const missingIndicators = ['n/a', 'na', '-', '--', 'null', 'undefined', 'none', ''];
+            if (!rawValue || missingIndicators.includes(rawValue.toLowerCase())) {
                 return null;
             }
 
