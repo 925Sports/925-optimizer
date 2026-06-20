@@ -1623,18 +1623,27 @@
                 }
 
                 // Game / Team / Callout filters
-                // Make game filter permissive for rows with missing/empty game title (common in soccer data quality)
+                // Permissive for blanks/missing values (very common in soccer data).
+                // Props with empty game/team/callout will show unless user explicitly deselects the blank option in the filter popup.
                 filtered = filtered.filter(row => {
                     const gameTitle = row['Game Short Title'] || row.Game || '';
                     const gameOk = !gameTitle || store.selectedGames.has(gameTitle);
-                    const teamOk = store.selectedTeams.has(row.Team || '');
-                    const calloutOk = !row['Callout Bet Tag'] || store.selectedCallouts.has((row['Callout Bet Tag'] || '').trim());
+
+                    const team = row.Team || '';
+                    const teamOk = !team || store.selectedTeams.has(team);
+
+                    const callout = (row['Callout Bet Tag'] || '').trim();
+                    const calloutOk = !callout || store.selectedCallouts.has(callout);
+
                     return gameOk && teamOk && calloutOk;
                 });
 
                 // Advanced filters (now applied to all sports including soccer)
                 if (store.selectedBetTags.size > 0) {
-                    filtered = filtered.filter(row => store.selectedBetTags.has((row['Bet Tag'] || '').trim()));
+                    filtered = filtered.filter(row => {
+                        const bt = (row['Bet Tag'] || '').trim();
+                        return !bt || store.selectedBetTags.has(bt);
+                    });
                 }
                 if (store.selectedFav.size > 0) {
                     filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
