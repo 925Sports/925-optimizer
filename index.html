@@ -1611,8 +1611,10 @@
                 }
 
                 // Game / Team / Callout filters
+                // Make game filter permissive for rows with missing/empty game title (common in soccer data quality)
                 filtered = filtered.filter(row => {
-                    const gameOk = store.selectedGames.has(row['Game Short Title'] || '');
+                    const gameTitle = row['Game Short Title'] || row.Game || '';
+                    const gameOk = !gameTitle || store.selectedGames.has(gameTitle);
                     const teamOk = store.selectedTeams.has(row.Team || '');
                     const calloutOk = !row['Callout Bet Tag'] || store.selectedCallouts.has((row['Callout Bet Tag'] || '').trim());
                     return gameOk && teamOk && calloutOk;
@@ -3639,6 +3641,14 @@
             // Treat 0 (or very close to 0) as "no Underdog line"
             // This catches common data issues in MLB feeds where missing lines are stored as 0
             if (isNaN(num) || Math.abs(num) < 0.01) {
+                return null;
+            }
+
+            // Special rule for Fantasy Score props (MLB, NBA, etc.):
+            // Underdog does not offer Fantasy Score lines (or data feed puts placeholder ~0.3).
+            // If UD line for a Fantasy Score prop is 0.3 or less, treat it as "no UD line".
+            const statTypeLower = (row['Stat Type'] || '').toLowerCase();
+            if (statTypeLower.includes('fantasy score') && num <= 0.3) {
                 return null;
             }
 
