@@ -1245,6 +1245,13 @@
             store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
             store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
 
+            // Soccer: start advanced filters deselected so all props show by default
+            if (sport === 'soccer') {
+                store.selectedBetTags = new Set();
+                store.selectedFav = new Set();
+                store.selectedGameTypes = new Set();
+            }
+
             // No heavy game log precomputation on initial load for speed.
             // L5 stats + game logs are now calculated on-demand when user opens a player popup.
             data.forEach(row => {
@@ -1333,6 +1340,15 @@
                 store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
                 store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
                 store.selectedStatTypes = new Set(); // start with "All" stat types
+
+                // For Soccer tab: start advanced filters (Bet Tag / Fav / O/U) deselected by default.
+                // This makes the tab show ALL soccer props initially (matching what user discovered),
+                // while still allowing the popup to work when they want to filter.
+                if (currentSport === 'soccer') {
+                    store.selectedBetTags = new Set();
+                    store.selectedFav = new Set();
+                    store.selectedGameTypes = new Set();
+                }
 
                 // Reset search & view for cleanliness
                 searchInput.value = store.searchTerm || '';
@@ -3811,11 +3827,39 @@
                 btList.appendChild(div);
             });
 
+            // Attach handlers right after populating the list (more reliable)
+            const selectAllBetTagsBtn = document.getElementById('selectAllBetTags');
+            const deselectAllBetTagsBtn = document.getElementById('deselectAllBetTags');
+            if (selectAllBetTagsBtn) {
+                selectAllBetTagsBtn.onclick = () => btList.querySelectorAll('input').forEach(cb => cb.checked = true);
+            }
+            if (deselectAllBetTagsBtn) {
+                deselectAllBetTagsBtn.onclick = () => btList.querySelectorAll('input').forEach(cb => cb.checked = false);
+            }
+
             const favList = document.getElementById('favList');
             favList.innerHTML = `<label><input type="checkbox" ${store.selectedFav.has('Yes')?'checked':''} value="Yes"> Yes (Favorite)</label><label><input type="checkbox" ${store.selectedFav.has('No')?'checked':''} value="No"> No</label>`;
 
+            const selectAllFavBtn = document.getElementById('selectAllFav');
+            const deselectAllFavBtn = document.getElementById('deselectAllFav');
+            if (selectAllFavBtn) {
+                selectAllFavBtn.onclick = () => favList.querySelectorAll('input').forEach(cb => cb.checked = true);
+            }
+            if (deselectAllFavBtn) {
+                deselectAllFavBtn.onclick = () => favList.querySelectorAll('input').forEach(cb => cb.checked = false);
+            }
+
             const gtList = document.getElementById('gameTypesList');
             gtList.innerHTML = `<label><input type="checkbox" ${store.selectedGameTypes.has('High')?'checked':''} value="High"> High Scoring (O/U ≥9.6)</label><label><input type="checkbox" ${store.selectedGameTypes.has('Normal')?'checked':''} value="Normal"> Normal</label><label><input type="checkbox" ${store.selectedGameTypes.has('Low')?'checked':''} value="Low"> Low Scoring (O/U ≤8.4)</label>`;
+
+            const selectAllGameTypesBtn = document.getElementById('selectAllGameTypes');
+            const deselectAllGameTypesBtn = document.getElementById('deselectAllGameTypes');
+            if (selectAllGameTypesBtn) {
+                selectAllGameTypesBtn.onclick = () => gtList.querySelectorAll('input').forEach(cb => cb.checked = true);
+            }
+            if (deselectAllGameTypesBtn) {
+                deselectAllGameTypesBtn.onclick = () => gtList.querySelectorAll('input').forEach(cb => cb.checked = false);
+            }
 
             const hcList = document.getElementById('hotColdList');
             // Hide Hot/Cold section entirely for soccer (no meaningful data)
