@@ -1430,8 +1430,8 @@
 
             let statTypes = [...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
 
-            // Limit to most common for cleanliness
-            if (statTypes.length > 14) statTypes = statTypes.slice(0, 14);
+            // Limit to most common for cleanliness (increased to 20 so Outfield Fantasy Score etc. appear on Soccer)
+            if (statTypes.length > 20) statTypes = statTypes.slice(0, 20);
 
             // "All" button clears selection
             const allBtn = document.createElement('div');
@@ -1586,9 +1586,13 @@
                 }
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
-                // Multi-select Stat Type filter
+                // Multi-select Stat Type filter (case-insensitive + trim for robustness across sports/CSVs)
                 if (store.selectedStatTypes.size > 0) {
-                    filtered = filtered.filter(row => store.selectedStatTypes.has((row['Stat Type'] || '').trim()));
+                    const selectedLower = new Set(Array.from(store.selectedStatTypes).map(s => s.toLowerCase().trim()));
+                    filtered = filtered.filter(row => {
+                        const rowStat = (row['Stat Type'] || '').trim().toLowerCase();
+                        return selectedLower.has(rowStat);
+                    });
                 }
 
                 // Odds type
@@ -1910,16 +1914,17 @@
                         tr.appendChild(tdLine);
 
                         // PP - UD column: Shows PrizePicks line minus Underdog line.
-                        // Only calculates when a valid Underdog line exists.
-                        // Shows "-" when the prop does not exist on Underdog.
+                        // Shows "-" (and gray) when no valid Underdog line exists in data.
+                        // Positive = green (PP line > UD line), Negative = red (UD line > PP line).
                         const tdPPUD = document.createElement('td');
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
                         const ppLineVal = parseFloat(row['Line Score'] || row.Line || 0);
                         const udLineVal = getUnderdogLine(row);
 
-                        let displayValue, numericDiff;
-                        if (udLineVal === null) {
+                        let displayValue;
+                        let numericDiff = 0;
+                        if (udLineVal === null || udLineVal === undefined) {
                             displayValue = '-';
                             numericDiff = 0;
                         } else {
@@ -2317,13 +2322,15 @@
                     tr.appendChild(tdEdge);
 
                     // PP - UD column: Shows PrizePicks line minus Underdog line.
-                    // Shows "-" when the prop does not exist on Underdog.
+                    // Shows "-" (and gray) when no valid Underdog line exists in data.
+                    // Positive = green (PP line > UD line), Negative = red (UD line > PP line).
                     const tdPPUD = document.createElement('td');
                     const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
                     const udLineVal = getUnderdogLine(row);
 
-                    let displayValue, numericDiff;
-                    if (udLineVal === null) {
+                    let displayValue;
+                    let numericDiff = 0;
+                    if (udLineVal === null || udLineVal === undefined) {
                         displayValue = '-';
                         numericDiff = 0;
                     } else {
