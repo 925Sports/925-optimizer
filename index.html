@@ -1622,21 +1622,42 @@
                     );
                 }
 
-                // Game / Team / Callout filters
-                // Permissive for blanks/missing values (very common in soccer data).
-                // Props with empty game/team/callout will show unless user explicitly deselects the blank option in the filter popup.
-                filtered = filtered.filter(row => {
-                    const gameTitle = row['Game Short Title'] || row.Game || '';
-                    const gameOk = !gameTitle || store.selectedGames.has(gameTitle);
+                // Game / Team / Callout filters for Soccer
+                // Default behavior: Show ALL soccer props (start with everything visible).
+                // Only apply these filters if the user has actively opened a filter popup and deselected items
+                // (i.e. the selected set is smaller than the full unique list).
+                if (currentSport === 'soccer') {
+                    const gamesFull = !store.uniqueGames || store.selectedGames.size >= store.uniqueGames.length;
+                    const teamsFull = !store.uniqueTeams || store.selectedTeams.size >= store.uniqueTeams.length;
+                    const calloutsFull = !store.uniqueCallouts || store.selectedCallouts.size >= store.uniqueCallouts.length;
 
-                    const team = row.Team || '';
-                    const teamOk = !team || store.selectedTeams.has(team);
+                    filtered = filtered.filter(row => {
+                        const gameTitle = row['Game Short Title'] || row.Game || '';
+                        const gameOk = gamesFull || !gameTitle || store.selectedGames.has(gameTitle);
 
-                    const callout = (row['Callout Bet Tag'] || '').trim();
-                    const calloutOk = !callout || store.selectedCallouts.has(callout);
+                        const team = row.Team || '';
+                        const teamOk = teamsFull || !team || store.selectedTeams.has(team);
 
-                    return gameOk && teamOk && calloutOk;
-                });
+                        const callout = (row['Callout Bet Tag'] || '').trim();
+                        const calloutOk = calloutsFull || !callout || store.selectedCallouts.has(callout);
+
+                        return gameOk && teamOk && calloutOk;
+                    });
+                } else {
+                    // Normal strict filtering for other sports
+                    filtered = filtered.filter(row => {
+                        const gameTitle = row['Game Short Title'] || row.Game || '';
+                        const gameOk = store.selectedGames.has(gameTitle);
+
+                        const team = row.Team || '';
+                        const teamOk = store.selectedTeams.has(team);
+
+                        const callout = (row['Callout Bet Tag'] || '').trim();
+                        const calloutOk = !callout || store.selectedCallouts.has(callout);
+
+                        return gameOk && teamOk && calloutOk;
+                    });
+                }
 
                 // Advanced filters (now applied to all sports including soccer)
                 if (store.selectedBetTags.size > 0) {
