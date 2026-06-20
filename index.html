@@ -1322,6 +1322,18 @@
                     contentDiv.innerHTML = `<div class="loading">No ${currentSport.toUpperCase()} data loaded.</div>`;
                     return;
                 }
+
+                // When switching to an individual sport tab, reset all filters to "show everything"
+                // so the user always sees the full set of props for that sport (unless they explicitly filter).
+                if (store.uniqueGames && store.uniqueGames.length) store.selectedGames = new Set(store.uniqueGames);
+                if (store.uniqueTeams && store.uniqueTeams.length) store.selectedTeams = new Set(store.uniqueTeams);
+                if (store.uniqueCallouts && store.uniqueCallouts.length) store.selectedCallouts = new Set(store.uniqueCallouts);
+                if (store.uniqueBetTags && store.uniqueBetTags.length) store.selectedBetTags = new Set(store.uniqueBetTags);
+                store.selectedFav = new Set(['Yes', 'No']);
+                store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
+                store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
+                store.selectedStatTypes = new Set(); // start with "All" stat types
+
                 // Reset search & view for cleanliness
                 searchInput.value = store.searchTerm || '';
                 viewSelect.value = store.currentView;
@@ -1636,7 +1648,8 @@
                         return store.selectedGameTypes.has(type);
                     });
                 }
-                if (store.selectedHotCold.size > 0) {
+                // Hot/Cold filter is not applicable to soccer (no meaningful streak data)
+                if (currentSport !== 'soccer' && store.selectedHotCold.size > 0) {
                     filtered = filtered.filter(row => {
                         const status = getHotColdStatus(row['Player Name'], currentSport);
                         return store.selectedHotCold.has(status);
@@ -1828,19 +1841,13 @@
                     } else if (store.contentSortColumn === 'PPUD') {
                         sortedFiltered.sort((a, b) => {
                             const aPP = parseFloat(a['Line Score'] || a.Line || 0);
-                            const aUDRaw = (
-                                a['Underdog Line'] || a['UnderdogLine'] || a['UD Line'] || a['ud_line'] || a['Underdog_Line'] || ''
-                            ).toString().trim();
-                            const aUD = (aUDRaw === '' || isNaN(parseFloat(aUDRaw))) ? 0 : parseFloat(aUDRaw);
+                            const aUD = getUnderdogLine(a); // respects Fantasy Score <= 0.3 rule + all missing cases
+                            const aVal = (aUD === null || aUD === 0) ? 0 : aPP - aUD;
 
                             const bPP = parseFloat(b['Line Score'] || b.Line || 0);
-                            const bUDRaw = (
-                                b['Underdog Line'] || b['UnderdogLine'] || b['UD Line'] || b['ud_line'] || b['Underdog_Line'] || ''
-                            ).toString().trim();
-                            const bUD = (bUDRaw === '' || isNaN(parseFloat(bUDRaw))) ? 0 : parseFloat(bUDRaw);
+                            const bUD = getUnderdogLine(b);
+                            const bVal = (bUD === null || bUD === 0) ? 0 : bPP - bUD;
 
-                            const aVal = (aUD === 0 ? 0 : aPP - aUD);
-                            const bVal = (bUD === 0 ? 0 : bPP - bUD);
                             return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
                         });
                     } else if (store.contentSortColumn === 'L5Avg') {
@@ -3754,7 +3761,20 @@
             gtList.innerHTML = `<label><input type="checkbox" ${store.selectedGameTypes.has('High')?'checked':''} value="High"> High Scoring (O/U ≥9.6)</label><label><input type="checkbox" ${store.selectedGameTypes.has('Normal')?'checked':''} value="Normal"> Normal</label><label><input type="checkbox" ${store.selectedGameTypes.has('Low')?'checked':''} value="Low"> Low Scoring (O/U ≤8.4)</label>`;
 
             const hcList = document.getElementById('hotColdList');
-            hcList.innerHTML = `<label><input type="checkbox" ${store.selectedHotCold.has('Hot')?'checked':''} value="Hot"> Hot</label><label><input type="checkbox" ${store.selectedHotCold.has('Cold')?'checked':''} value="Cold"> Cold</label><label><input type="checkbox" ${store.selectedHotCold.has('Neutral')?'checked':''} value="Neutral"> Neutral</label>`;
+            // Hide Hot/Cold section entirely for soccer (no meaningful data)
+            if (currentSport === 'soccer') {
+                hcList.style.display = 'none';
+                // Also hide the preceding h3 + buttons for Hot/Cold
+                const hotColdHeader = hcList.parentNode.querySelector('h3:last-of-type');
+                if (hotColdHeader && hotColdHeader.textContent.includes('Hot')) hotColdHeader.style.display = 'none';
+                const selectAllHotCold = document.getElementById('selectAllHotCold');
+                const deselectAllHotCold = document.getElementById('deselectAllHotCold');
+                if (selectAllHotCold) selectAllHotCold.style.display = 'none';
+                if (deselectAllHotCold) deselectAllHotCold.style.display = 'none';
+            } else {
+                hcList.style.display = '';
+                hcList.innerHTML = `<label><input type="checkbox" ${store.selectedHotCold.has('Hot')?'checked':''} value="Hot"> Hot</label><label><input type="checkbox" ${store.selectedHotCold.has('Cold')?'checked':''} value="Cold"> Cold</label><label><input type="checkbox" ${store.selectedHotCold.has('Neutral')?'checked':''} value="Neutral"> Neutral</label>`;
+            }
 
             document.getElementById('applyAdvancedFilter').onclick = () => {
                 store.selectedBetTags = new Set(Array.from(btList.querySelectorAll('input:checked')).map(i => i.value));
