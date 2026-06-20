@@ -1659,24 +1659,51 @@
                     });
                 }
 
-                // Advanced filters (now applied to all sports including soccer)
-                if (store.selectedBetTags.size > 0) {
-                    filtered = filtered.filter(row => {
-                        const bt = (row['Bet Tag'] || '').trim();
-                        return !bt || store.selectedBetTags.has(bt);
-                    });
-                }
-                if (store.selectedFav.size > 0) {
-                    filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
-                }
-                if (store.selectedGameTypes.size > 0) {
-                    filtered = filtered.filter(row => {
-                        const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
-                        let type = 'Normal';
-                        if (ou >= 9.6) type = 'High';
-                        else if (ou <= 8.4) type = 'Low';
-                        return store.selectedGameTypes.has(type);
-                    });
+                // Advanced filters for Soccer - only apply if user has actively reduced the selection from full set.
+                // This ensures Soccer tab starts with ALL props visible, and only filters when user uses the popups.
+                if (currentSport === 'soccer') {
+                    const betTagsFull = !store.uniqueBetTags || store.selectedBetTags.size >= store.uniqueBetTags.length;
+                    const favFull = store.selectedFav.size >= 2; // Yes + No
+                    const gameTypesFull = store.selectedGameTypes.size >= 3; // High + Normal + Low
+
+                    if (!betTagsFull && store.selectedBetTags.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const bt = (row['Bet Tag'] || '').trim();
+                            return !bt || store.selectedBetTags.has(bt);
+                        });
+                    }
+                    if (!favFull && store.selectedFav.size > 0) {
+                        filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
+                    }
+                    if (!gameTypesFull && store.selectedGameTypes.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
+                            let type = 'Normal';
+                            if (ou >= 9.6) type = 'High';
+                            else if (ou <= 8.4) type = 'Low';
+                            return store.selectedGameTypes.has(type);
+                        });
+                    }
+                } else {
+                    // Normal behavior for other sports
+                    if (store.selectedBetTags.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const bt = (row['Bet Tag'] || '').trim();
+                            return !bt || store.selectedBetTags.has(bt);
+                        });
+                    }
+                    if (store.selectedFav.size > 0) {
+                        filtered = filtered.filter(row => store.selectedFav.has(row['Fav'] || 'No'));
+                    }
+                    if (store.selectedGameTypes.size > 0) {
+                        filtered = filtered.filter(row => {
+                            const ou = parseFloat(row['O/U'] || row['Over/Under'] || 0);
+                            let type = 'Normal';
+                            if (ou >= 9.6) type = 'High';
+                            else if (ou <= 8.4) type = 'Low';
+                            return store.selectedGameTypes.has(type);
+                        });
+                    }
                 }
                 // Hot/Cold filter is not applicable to soccer (no meaningful streak data)
                 if (currentSport !== 'soccer' && store.selectedHotCold.size > 0) {
