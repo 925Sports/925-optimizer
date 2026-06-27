@@ -2993,7 +2993,7 @@
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
-        // ==================== MORE BOOKS TAB (Stable + Enhanced) ====================
+        // ==================== MORE BOOKS TAB (Aggressive Matching v4) ====================
         async function renderMoreBooksTab(row, sport, contentDiv) {
             if (sport !== 'mlb') {
                 contentDiv.innerHTML = `
@@ -3025,67 +3025,63 @@
                 const data = dataStore.mlb.comboData;
 
                 const statToMarket = {
-                    'hits': 'batter_hits',
-                    'doubles': 'batter_doubles',
-                    'triples': 'batter_triples',
-                    'home runs': 'batter_home_runs',
-                    'hr': 'batter_home_runs',
-                    'rbi': 'batter_rbis',
-                    'rbis': 'batter_rbis',
-                    'runs': 'batter_runs_scored',
-                    'runs scored': 'batter_runs_scored',
-                    'stolen bases': 'batter_stolen_bases',
-                    'walks': 'batter_walks',
-                    'strikeouts': 'batter_strikeouts',
-                    'batter strikeouts': 'batter_strikeouts',
-                    'hits + runs + rbi': 'batter_hits_runs_rbis',
-                    'hits+runs+rbis': 'batter_hits_runs_rbis',
-                    'h+r+rbi': 'batter_hits_runs_rbis',
-                    'pitcher strikeouts': 'pitcher_strikeouts',
-                    'pitcher hits allowed': 'pitcher_hits_allowed',
-                    'pitcher outs': 'pitcher_outs',
-                    'fantasy score': 'fantasy_points',
-                    'fantasy points': 'fantasy_points',
-                    'fpts': 'fantasy_points',
-                    'score': 'fantasy_points',
-                    'hitter fantasy score': 'fantasy_points',
-                    'pitcher fantasy score': 'fantasy_points'
+                    'hits': 'batter_hits', 'doubles': 'batter_doubles', 'triples': 'batter_triples',
+                    'home runs': 'batter_home_runs', 'hr': 'batter_home_runs',
+                    'rbi': 'batter_rbis', 'rbis': 'batter_rbis',
+                    'runs': 'batter_runs_scored', 'runs scored': 'batter_runs_scored',
+                    'stolen bases': 'batter_stolen_bases', 'walks': 'batter_walks',
+                    'strikeouts': 'batter_strikeouts', 'batter strikeouts': 'batter_strikeouts',
+                    'hits + runs + rbi': 'batter_hits_runs_rbis', 'hits+runs+rbis': 'batter_hits_runs_rbis', 'h+r+rbi': 'batter_hits_runs_rbis',
+                    'pitcher strikeouts': 'pitcher_strikeouts', 'pitcher hits allowed': 'pitcher_hits_allowed', 'pitcher outs': 'pitcher_outs',
+                    'fantasy score': 'fantasy_points', 'fantasy points': 'fantasy_points', 'fpts': 'fantasy_points', 'score': 'fantasy_points'
                 };
 
                 let targetMarket = statToMarket[statTypeRaw];
+                if (!targetMarket && (statTypeRaw.includes('fantasy') || statTypeRaw.includes('fpts') || statTypeRaw.includes('score'))) targetMarket = 'fantasy_points';
+                if (!targetMarket && (statTypeRaw.includes('pitcher strikeout') || statTypeRaw.includes('pitcher k'))) targetMarket = 'pitcher_strikeouts';
+                if (!targetMarket && statTypeRaw.includes('pitcher hit')) targetMarket = 'pitcher_hits_allowed';
+                if (!targetMarket && (statTypeRaw.includes('pitcher out') || statTypeRaw.includes('outs'))) targetMarket = 'pitcher_outs';
 
-                if (!targetMarket && (statTypeRaw.includes('fantasy') || statTypeRaw.includes('fpts') || statTypeRaw.includes('score'))) {
-                    targetMarket = 'fantasy_points';
-                }
-                if (!targetMarket && (statTypeRaw.includes('pitcher strikeout') || statTypeRaw.includes('pitcher k') ||
-                    (statTypeRaw.includes('strikeout') && (statTypeRaw.includes('pitcher') || (row.position || row.Pos || '').toUpperCase().includes('P'))))) {
-                    targetMarket = 'pitcher_strikeouts';
-                }
-                if (!targetMarket && statTypeRaw.includes('pitcher hit')) {
-                    targetMarket = 'pitcher_hits_allowed';
-                }
-                if (!targetMarket && (statTypeRaw.includes('pitcher out') || statTypeRaw.includes('outs'))) {
-                    targetMarket = 'pitcher_outs';
-                }
-
+                // === Much more aggressive matching ===
                 let matches = data.filter(p => {
                     const desc = (p.description || '').toLowerCase();
                     const market = (p.market || '').toLowerCase();
                     const pointVal = parseFloat(p.point);
+
+                    // Flexible player match (last name anywhere in description)
                     const lastName = playerName.split(/\s+/).pop().toLowerCase();
-                    const playerMatch = desc.includes(lastName) || normalizeName(desc).includes(normalizeName(playerName));
-                    const marketMatch = targetMarket && (market === targetMarket || market.includes(targetMarket));
-                    const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - originalLine) < 0.8;
+                    const playerMatch = desc.includes(lastName) || 
+                                        playerName.toLowerCase().split(/\s+/).some(w => w.length > 2 && desc.includes(w));
+
+                    // Flexible market match
+                    let marketMatch = false;
+                    if (targetMarket) {
+                        marketMatch = market === targetMarket || market.includes(targetMarket) || targetMarket.includes(market);
+                    } else {
+                        // Fallback: try to match keywords from the original stat type
+                        const keywords = statTypeRaw.split(/\s+/).filter(w => w.length > 3);
+                        marketMatch = keywords.some(kw => market.includes(kw));
+                    }
+
+                    // Line match with tolerance
+                    const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - originalLine) < 0.9;
+
                     return playerMatch && marketMatch && lineMatch;
                 });
 
+                // Closest line fallback for whole numbers
                 if (matches.length === 0 && Number.isInteger(originalLine)) {
                     const allForProp = data.filter(p => {
                         const desc = (p.description || '').toLowerCase();
                         const market = (p.market || '').toLowerCase();
                         const lastName = playerName.split(/\s+/).pop().toLowerCase();
-                        const playerMatch = desc.includes(lastName) || normalizeName(desc).includes(normalizeName(playerName));
-                        const marketMatch = targetMarket && (market === targetMarket || market.includes(targetMarket));
+                        const playerMatch = desc.includes(lastName) || playerName.toLowerCase().split(/\s+/).some(w => w.length > 2 && desc.includes(w));
+                        let marketMatch = false;
+                        if (targetMarket) marketMatch = market.includes(targetMarket);
+                        else {
+                            const keywords = statTypeRaw.split(/\s+/).filter(w => w.length > 3);
+                            marketMatch = keywords.some(kw => market.includes(kw));
+                        }
                         return playerMatch && marketMatch;
                     });
                     if (allForProp.length > 0) {
@@ -3100,12 +3096,14 @@
                         <div style="padding:20px; color:#ccc; font-size:13px;">
                             <strong>No multi-book lines found</strong> for this prop.<br><br>
                             <div style="background:#111; padding:10px; border-radius:6px; font-size:11px; font-family:monospace;">
-                                Tried: ${playerName} | ${statTypeRaw} → ${targetMarket || 'no mapping'} | Line ${originalLine}
+                                Tried: ${playerName} | ${statTypeRaw} → ${targetMarket || 'keyword match'} | Line ${originalLine}<br>
+                                Scanned ${data.length} rows from combo_data.csv
                             </div>
                         </div>`;
                     return;
                 }
 
+                // Best per book + sort by Edge %
                 const byBook = {};
                 matches.forEach(p => {
                     const book = p.bookmaker || 'Unknown';
