@@ -2778,7 +2778,7 @@
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
-            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup'];
+            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
             tabNames.forEach((name, i) => {
                 const t = document.createElement('div');
                 t.className = `tab ${i === 0 ? 'active' : ''}`;
@@ -2993,7 +2993,7 @@
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
-        // ==================== MORE BOOKS TAB (Improved Matching for Chase Burns / Christian Scott cases) ====================
+        // ==================== MORE BOOKS TAB (Stable + Improved Matching) ====================
         async function renderMoreBooksTab(row, sport, contentDiv) {
             if (sport !== 'mlb') {
                 contentDiv.innerHTML = `
@@ -3042,20 +3042,14 @@
                 if (!targetMarket && statTypeRaw.includes('pitcher hit')) targetMarket = 'pitcher_hits_allowed';
                 if (!targetMarket && (statTypeRaw.includes('pitcher out') || statTypeRaw.includes('outs'))) targetMarket = 'pitcher_outs';
 
-                // === Improved flexible matching ===
                 let matches = data.filter(p => {
                     const desc = (p.description || '').toLowerCase();
                     const market = (p.market || '').toLowerCase();
                     const pointVal = parseFloat(p.point);
-
-                    // Very flexible player match
                     const lastName = playerName.split(/\s+/).pop().toLowerCase();
                     const firstName = playerName.split(/\s+/)[0].toLowerCase();
-                    const playerMatch = desc.includes(lastName) || 
-                                        (firstName.length > 2 && desc.includes(firstName)) ||
+                    const playerMatch = desc.includes(lastName) || (firstName.length > 2 && desc.includes(firstName)) ||
                                         playerName.toLowerCase().split(/\s+/).some(w => w.length > 2 && desc.includes(w));
-
-                    // Flexible market match
                     let marketMatch = false;
                     if (targetMarket) {
                         marketMatch = market === targetMarket || market.includes(targetMarket) || targetMarket.includes(market);
@@ -3063,14 +3057,10 @@
                         const keywords = statTypeRaw.split(/\s+/).filter(w => w.length > 3);
                         marketMatch = keywords.some(kw => market.includes(kw));
                     }
-
-                    // Wider line tolerance
                     const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - originalLine) < 1.1;
-
                     return playerMatch && marketMatch && lineMatch;
                 });
 
-                // Strong closest line fallback (especially for whole number lines like 7 when CSV has 7.5)
                 if (matches.length === 0) {
                     const allForProp = data.filter(p => {
                         const desc = (p.description || '').toLowerCase();
@@ -3087,11 +3077,10 @@
                         }
                         return playerMatch && marketMatch;
                     });
-
                     if (allForProp.length > 0) {
                         allForProp.sort((a, b) => Math.abs(parseFloat(a.point) - originalLine) - Math.abs(parseFloat(b.point) - originalLine));
-                        const closestLine = parseFloat(allForProp[0].point);
-                        matches = allForProp.filter(p => parseFloat(p.point) === closestLine);
+                        const closest = parseFloat(allForProp[0].point);
+                        matches = allForProp.filter(p => parseFloat(p.point) === closest);
                     }
                 }
 
@@ -3101,14 +3090,13 @@
                             <strong>No multi-book lines found</strong> for this exact line.<br><br>
                             <div style="font-size:12px; color:#888;">
                                 We looked for <strong>${playerName}</strong> — <strong>${row['Stat Type']}</strong> near line <strong>${originalLine}</strong>.<br>
-                                Your combo data may have this prop at a slightly different line (e.g. 7.5 instead of 7).<br><br>
+                                Your combo data may have this prop at a slightly different line.<br><br>
                                 Try checking a nearby line or let me know the exact player + stat and I can improve the matching.
                             </div>
                         </div>`;
                     return;
                 }
 
-                // Best per book + sort by Edge %
                 const byBook = {};
                 matches.forEach(p => {
                     const book = p.bookmaker || 'Unknown';
@@ -3852,6 +3840,8 @@
                 content.innerHTML = h;
             } else if (tab === 'Matchup') {
                 content.innerHTML = `<div style="padding:12px;"><strong>Opponent:</strong> ${row.Opp || row['Opponent'] || 'N/A'}<br><strong>DVP Rank:</strong> ${row['DVP Rank'] || row['DVP'] || '-'}<br><strong>Spread / O/U:</strong> ${row['Spread'] || '-'} / ${row['O/U'] || '-'}</div>`;
+            } else if (tab === 'More Books') {
+                renderMoreBooksTab(row, sport, content);
             }
         }
 
