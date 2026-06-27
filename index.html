@@ -914,7 +914,6 @@
         let currentFiltered = [];
         let currentChart = null;
         let currentRowIndex = 0;
-        let lastNavTime = 0; // debounce for next/prev to prevent skipping players from stacked listeners
         let betSlipsSortColumn = 'Edge';
         let betSlipsSortDirection = 'desc';
         let selectedPayout = 'all';
@@ -1013,13 +1012,14 @@
                     return calculateFantasyScore(log, sport);
                 }
 
-                const isPitcher = lowerStat.includes('pitcher') || lowerStat.includes('strikeout') || lowerStat.includes('ip') || lowerStat.includes('er') || lowerStat.includes('earned run') || 
-                                  (log.position || '').toUpperCase().includes('P') || (log.Pos || '').toUpperCase().includes('P');
+                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
+                                  lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
+                                  lowerStat.includes('strikeout') || lowerStat.includes('earned run');
 
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || log['K'] || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
@@ -2878,7 +2878,7 @@
                                 popupContent.style.animation = 'slideInFromRight 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    navigatePopup(1);
+                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
                                 }, 80);
                             }
                         } else {
@@ -2889,7 +2889,7 @@
                                 popupContent.style.animation = 'slideInFromLeft 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    navigatePopup(-1);
+                                    showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
                                 }, 80);
                             }
                         }
@@ -2987,10 +2987,6 @@
 
         function navigatePopup(delta) {
             // Navigation now works on All tab too (we set currentFiltered there)
-            const now = Date.now();
-            if (now - lastNavTime < 280) return; // debounce rapid triggers from stacked swipe listeners
-            lastNavTime = now;
-
             let newIndex = currentRowIndex + delta;
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
@@ -3087,17 +3083,13 @@
                 const labels = projections.map(p => p.name);
                 const values = projections.map(p => p.value);
 
-                const neutralColor = 'rgba(156, 163, 175, 0.85)';
-                const goodColor = 'rgba(34, 197, 94, 0.85)';
-                const badColor = 'rgba(239, 68, 68, 0.85)';
                 const colors = projections.map(p => {
                     const name = p.name.toLowerCase();
+                    // UD Line should follow the same green/red rule as other projections (no special red)
                     if (name.includes('line')) {
-                        return neutralColor;
+                        return 'rgba(156, 163, 175, 0.85)';
                     }
-                    if (p.value > lineScore) return goodColor;
-                    if (p.value < lineScore) return badColor;
-                    return neutralColor; // equal / push = grey
+                    return p.value > lineScore ? 'rgba(34, 197, 94, 0.85)' : 'rgba(239, 68, 68, 0.85)';
                 });
 
                 if (window.ChartDataLabels) {
@@ -4242,6 +4234,37 @@
         };
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
+
+        // === Robust Pull-to-Refresh Prevention ===
+        // Only allow the native pull-to-refresh gesture when the user is at the very top
+        let lastTouchY = 0;
+        let isScrolling = false;
+
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                lastTouchY = e.touches[0].clientY;
+                isScrolling = false;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+            if (e.touches.length !== 1) return;
+
+            const currentY = e.touches[0].clientY;
+            const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+
+            // Detect if user is trying to pull down
+            const isPullingDown = currentY > lastTouchY;
+
+            // Only block if:
+            // - User is pulling down
+            // - Not near the very top of the page
+            if (isPullingDown && scrollTop > 8) {
+                e.preventDefault();
+            }
+
+            lastTouchY = currentY;
+        }, { passive: false });
     </script>
 </body>
 </html>
