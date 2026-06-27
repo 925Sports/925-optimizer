@@ -1012,16 +1012,6 @@
                     return calculateFantasyScore(log, sport);
                 }
 
-                // Robust early guard for any variation of Pitcher Strikeouts / K
-                if (lowerStat.includes('strikeout') || lowerStat.includes(' k') || lowerStat === 'k' || lowerStat.includes('so')) {
-                    const isPitcherProp = lowerStat.includes('pitcher') || 
-                                          (log.position || '').toUpperCase().includes('P') || 
-                                          (log.Pos || '').toUpperCase().includes('P');
-                    if (isPitcherProp) {
-                        return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || 0);
-                    }
-                }
-
                 const isPitcher = (log.position || '').toUpperCase().includes('P') || 
                                   lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
                                   lowerStat.includes('strikeout') || lowerStat.includes('earned run');
@@ -1029,7 +1019,7 @@
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
@@ -2788,7 +2778,7 @@
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
-            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup'];
+            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
             tabNames.forEach((name, i) => {
                 const t = document.createElement('div');
                 t.className = `tab ${i === 0 ? 'active' : ''}`;
@@ -3003,13 +2993,13 @@
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
-        // ==================== MORE BOOKS TAB (Improved MLB Matching + Debug) ====================
+        // ==================== MORE BOOKS TAB (Reliable MLB Matching) ====================
         async function renderMoreBooksTab(row, sport, contentDiv) {
             if (sport !== 'mlb') {
                 contentDiv.innerHTML = `
-                    <div style="padding:40px 20px; text-align:center; color:#888;">
-                        <div style="font-size:18px; margin-bottom:12px;">📊 More Books</div>
-                        <p>Multi-book comparison is currently <strong>MLB only</strong>.<br>WNBA/NBA/Soccer coming soon.</p>
+                    <div style="padding: 40px 20px; text-align: center; color: #888;">
+                        <div style="font-size: 18px; margin-bottom: 12px;">📊 More Books</div>
+                        <p>Multi-book comparison is currently available for <strong>MLB only</strong>.<br>WNBA, NBA, and Soccer versions coming soon.</p>
                     </div>`;
                 return;
             }
@@ -3020,82 +3010,107 @@
 
             contentDiv.innerHTML = `
                 <div style="padding:30px 20px; text-align:center;">
-                    <div style="color:#00ffcc; font-weight:600;">Loading multi-book comparison...</div>
+                    <div style="color:#00ffcc; font-weight:600;">Loading multi-book data...</div>
                     <div style="font-size:12px; color:#666; margin-top:6px;">Matching ${playerName} — ${row['Stat Type']} ${line}</div>
                 </div>`;
 
             try {
+                // Lazy load + cache combo data
                 if (!dataStore.mlb.comboData) {
                     const res = await fetch('https://raw.githubusercontent.com/925Sports/mlb-prop-optimizer/main/combo_data.csv');
-                    if (!res.ok) throw new Error('Could not fetch combo_data.csv');
+                    if (!res.ok) throw new Error('Failed to load combo_data.csv from GitHub');
                     const text = await res.text();
                     dataStore.mlb.comboData = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
                 }
 
                 const data = dataStore.mlb.comboData;
 
-                // Much more robust matching
+                // === Smart Stat Type → Market Mapping ===
+                const statToMarket = {
+                    'pitcher strikeouts': 'pitcher_strikeouts',
+                    'strikeouts': 'pitcher_strikeouts',
+                    'k': 'pitcher_strikeouts',
+                    'hits': 'batter_hits',
+                    'home runs': 'batter_home_runs',
+                    'hr': 'batter_home_runs',
+                    'rbis': 'batter_rbis',
+                    'runs scored': 'batter_runs_scored',
+                    'total bases': 'batter_total_bases',
+                    'walks': 'batter_walks',
+                    'stolen bases': 'batter_stolen_bases',
+                    'hits+runs+rbis': 'batter_hits_runs_rbis',
+                    'h+r+rbi': 'batter_hits_runs_rbis'
+                };
+
+                const targetMarket = statToMarket[statType] || statType.replace(/\s+/g, '_');
+
+                // === Robust Matching ===
                 const matches = data.filter(p => {
                     const desc = (p.description || '').toLowerCase();
                     const market = (p.market || '').toLowerCase();
                     const pointVal = parseFloat(p.point);
 
-                    // Player match: last name or full normalized name
-                    const lastName = playerName.split(' ').pop().toLowerCase();
+                    // Player match (last name or normalized full name)
+                    const lastName = playerName.split(/\s+/).pop().toLowerCase();
                     const playerMatch = desc.includes(lastName) || 
                                         normalizeName(desc).includes(normalizeName(playerName));
 
-                    // Stat match: market or description contains key parts of the stat type
-                    const statMatch = market.includes(statType.replace(/\s+/g, '')) ||
-                                      desc.includes(statType) ||
-                                      (statType.includes('strikeout') && (market.includes('strikeout') || desc.includes('strikeout'))) ||
-                                      (statType.includes('hit') && market.includes('hit')) ||
-                                      (statType.includes('total base') && market.includes('total_base'));
+                    // Market match (exact mapped market or contains key words)
+                    const marketMatch = market === targetMarket || 
+                                        market.includes(targetMarket) ||
+                                        (statType.includes('strikeout') && market.includes('strikeout')) ||
+                                        (statType.includes('hit') && market.includes('hit'));
 
-                    // Line match (allow small tolerance)
-                    const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - line) < 0.6;
+                    // Line match with tolerance
+                    const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - line) < 0.8;
 
-                    return playerMatch && statMatch && lineMatch;
+                    return playerMatch && marketMatch && lineMatch;
                 });
 
                 if (matches.length === 0) {
-                    // Show debug info so user can help improve matching
                     contentDiv.innerHTML = `
-                        <div style="padding:20px; font-size:13px; color:#ccc;">
-                            <strong>No matching lines found</strong> for this prop.<br><br>
-                            <div style="background:#1a1a1a; padding:12px; border-radius:8px; font-family:monospace; font-size:12px;">
-                                Tried to match:<br>
-                                Player: <span style="color:#00ffcc">${playerName}</span><br>
-                                Stat Type: <span style="color:#00ffcc">${statType}</span><br>
-                                Line: <span style="color:#00ffcc">${line}</span><br><br>
-                                <span style="color:#888">Tip: Open browser console (F12) and look for "MoreBooks Debug" logs, or tell me the exact "description" and "market" from combo_data.csv for this prop.</span>
+                        <div style="padding: 20px; color: #ccc; font-size: 13px;">
+                            <strong>No multi-book lines found</strong> for this exact prop.<br><br>
+                            <div style="background:#111; padding:10px; border-radius:6px; font-size:11px; font-family:monospace;">
+                                Tried matching:<br>
+                                Player: ${playerName}<br>
+                                Stat: ${statType} → market: ${targetMarket}<br>
+                                Line: ${line}
+                            </div>
+                            <div style="margin-top:12px; font-size:12px; color:#888;">
+                                Tip: Tell me the exact "description" and "market" from combo_data.csv for this prop and I can refine the matching instantly.
                             </div>
                         </div>`;
-                    console.log('%c[MoreBooks Debug] No matches. Props tried:', 'color:#f59e0b', { playerName, statType, line });
+                    console.log('%c[More Books] No matches found for:', 'color:#f59e0b', { playerName, statType, line, targetMarket });
                     return;
                 }
 
-                // Group by bookmaker and show best edge per book
+                // Group by bookmaker and keep best edge per book
                 const byBook = {};
                 matches.forEach(p => {
                     const book = p.bookmaker || 'Unknown';
-                    if (!byBook[book]) byBook[book] = p;
-                    else if ((parseFloat(p['Max No-Vig Diff']) || 0) > (parseFloat(byBook[book]['Max No-Vig Diff']) || 0)) {
+                    const currentEdge = parseFloat(p['Max No-Vig Diff'] || p['Adjusted % Edge'] || 0);
+                    if (!byBook[book] || currentEdge > (parseFloat(byBook[book]['Max No-Vig Diff'] || byBook[book]['Adjusted % Edge'] || 0))) {
                         byBook[book] = p;
                     }
                 });
 
+                // Render table
                 let html = `<div style="padding:12px 8px 0;">
                     <div style="margin-bottom:10px; font-weight:600; color:#fff; font-size:15px;">
-                        ${playerName} — ${row['Stat Type']} ${line} <span style="color:#666; font-size:12px;">(${Object.keys(byBook).length} books)</span>
+                        ${playerName} — ${row['Stat Type']} ${line} 
+                        <span style="color:#666; font-size:12px;">(${Object.keys(byBook).length} books)</span>
                     </div>
-                    <table style="width:100%; font-size:12.5px;">
-                        <thead><tr style="background:#222; position:sticky; top:0;">
-                            <th style="text-align:left; padding:6px 8px;">Book</th>
-                            <th style="text-align:right; padding:6px 8px;">Over</th>
-                            <th style="text-align:right; padding:6px 8px;">Under</th>
-                            <th style="text-align:right; padding:6px 8px;">Edge</th>
-                        </tr></thead><tbody>`;
+                    <table style="width:100%; font-size:12.5px; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background:#222; position: sticky; top:0;">
+                                <th style="text-align:left; padding:7px 8px; border-bottom:1px solid #333;">Bookmaker</th>
+                                <th style="text-align:right; padding:7px 8px; border-bottom:1px solid #333;">Over</th>
+                                <th style="text-align:right; padding:7px 8px; border-bottom:1px solid #333;">Under</th>
+                                <th style="text-align:right; padding:7px 8px; border-bottom:1px solid #333;">Edge %</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
 
                 Object.keys(byBook).sort().forEach(book => {
                     const p = byBook[book];
@@ -3105,18 +3120,22 @@
                     const edgeColor = edge > 0 ? '#22c55e' : (edge < 0 ? '#ef4444' : '#aaa');
 
                     html += `<tr style="border-bottom:1px solid #333;">
-                        <td style="padding:6px 8px; font-weight:600;">${book}</td>
-                        <td style="padding:6px 8px; text-align:right; font-family:monospace;">${over}</td>
-                        <td style="padding:6px 8px; text-align:right; font-family:monospace;">${under}</td>
-                        <td style="padding:6px 8px; text-align:right; font-weight:700; color:${edgeColor};">${edge.toFixed(1)}%</td>
+                        <td style="padding:7px 8px; font-weight:600;">${book}</td>
+                        <td style="padding:7px 8px; text-align:right; font-family:monospace;">${over}</td>
+                        <td style="padding:7px 8px; text-align:right; font-family:monospace;">${under}</td>
+                        <td style="padding:7px 8px; text-align:right; font-weight:700; color:${edgeColor};">${edge.toFixed(1)}%</td>
                     </tr>`;
                 });
 
                 html += `</tbody></table></div>`;
                 contentDiv.innerHTML = html;
 
-            } catch (e) {
-                contentDiv.innerHTML = `<div style="padding:30px; color:#ef4444; text-align:center;">Error loading multi-book data: ${e.message}</div>`;
+            } catch (err) {
+                contentDiv.innerHTML = `
+                    <div style="padding:30px; text-align:center; color:#ef4444;">
+                        Failed to load multi-book data.<br>
+                        <span style="font-size:12px; color:#888;">${err.message}</span>
+                    </div>`;
             }
         }
 
