@@ -2778,7 +2778,7 @@
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
-            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup'];
+            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
             tabNames.forEach((name, i) => {
                 const t = document.createElement('div');
                 t.className = `tab ${i === 0 ? 'active' : ''}`;
@@ -2993,7 +2993,7 @@
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
-        // ==================== MORE BOOKS TAB (Enhanced with extra columns + True Price + Likelihood) ====================
+        // ==================== MORE BOOKS TAB (Stable + Enhanced) ====================
         async function renderMoreBooksTab(row, sport, contentDiv) {
             if (sport !== 'mlb') {
                 contentDiv.innerHTML = `
@@ -3068,7 +3068,6 @@
                     targetMarket = 'pitcher_outs';
                 }
 
-                // Exact / close match
                 let matches = data.filter(p => {
                     const desc = (p.description || '').toLowerCase();
                     const market = (p.market || '').toLowerCase();
@@ -3080,7 +3079,6 @@
                     return playerMatch && marketMatch && lineMatch;
                 });
 
-                // Closest line fallback for whole numbers
                 if (matches.length === 0 && Number.isInteger(originalLine)) {
                     const allForProp = data.filter(p => {
                         const desc = (p.description || '').toLowerCase();
@@ -3108,7 +3106,6 @@
                     return;
                 }
 
-                // Best per book + sort by Edge %
                 const byBook = {};
                 matches.forEach(p => {
                     const book = p.bookmaker || 'Unknown';
@@ -3124,7 +3121,6 @@
                     return edgeB - edgeA;
                 });
 
-                // Get True Price / Likelihood from first match if available
                 const first = matches[0];
                 const truePrice = first['True Price'] || first['True Point Average Line'] || '';
                 const likelihood = first['True Point Average Line'] || first['Average No-Vig Over %'] || first['No-Vig Over %'] || '';
@@ -3137,7 +3133,6 @@
                     </div>`;
                 }
 
-                // Enhanced table with Over % / Under % / No-Vig %
                 let html = `<div style="padding:12px 8px 0;">
                     <div style="margin-bottom:6px; font-weight:600; color:#fff; font-size:15px;">
                         ${playerName} — ${row['Stat Type']} ${originalLine} 
@@ -3854,6 +3849,8 @@
                 content.innerHTML = h;
             } else if (tab === 'Matchup') {
                 content.innerHTML = `<div style="padding:12px;"><strong>Opponent:</strong> ${row.Opp || row['Opponent'] || 'N/A'}<br><strong>DVP Rank:</strong> ${row['DVP Rank'] || row['DVP'] || '-'}<br><strong>Spread / O/U:</strong> ${row['Spread'] || '-'} / ${row['O/U'] || '-'}</div>`;
+            } else if (tab === 'More Books') {
+                renderMoreBooksTab(row, sport, content);
             }
         }
 
