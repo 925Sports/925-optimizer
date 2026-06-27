@@ -1012,14 +1012,20 @@
                     return calculateFantasyScore(log, sport);
                 }
 
-                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
-                                  lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
-                                  lowerStat.includes('strikeout') || lowerStat.includes('earned run');
+                // Explicit early guard for Pitcher Strikeouts / Pitcher K props to prevent substring false-positives (e.g. "er" in "pitcher")
+                if (lowerStat.includes('pitcher strikeout') || lowerStat.includes('pitcher k') || 
+                    (lowerStat.includes('strikeout') && lowerStat.includes('pitcher')) ||
+                    lowerStat === 'strikeouts' || lowerStat === 'k') {
+                    return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || log['K'] || 0);
+                }
+
+                const isPitcher = lowerStat.includes('pitcher') || lowerStat.includes('strikeout') || lowerStat.includes('ip') || lowerStat.includes('er') || lowerStat.includes('earned run') || 
+                                  (log.position || '').toUpperCase().includes('P') || (log.Pos || '').toUpperCase().includes('P');
 
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
-                    if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || log['K'] || 0);
+                    if (lowerStat.includes('earned') || lowerStat.includes(' er') || lowerStat.includes('earned run')) return parseFloat(log.earnedRuns || log.ER || 0);
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
@@ -3186,7 +3192,7 @@
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
                     if (sport === 'mlb') {
-                        html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR/K</th><th>BB</th><th>FP</th><th>Summary</th>`;
+                        html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR</th><th>K</th><th>BB</th><th>FP</th><th>Summary</th>`;
                     } else {
                         html += `<th>Date</th><th>Opp</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>FP</th>`;
                     }
@@ -3218,7 +3224,8 @@
                             let col2 = isHitter ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
                             let col3 = isHitter ? (log.runs || log.R || 0) : '-';
                             let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
-                            let col5 = isHitter ? (log.homeRuns || log.HR || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                            let colHR = isHitter ? (log.homeRuns || log.HR || 0) : '-';
+                            let colK = isHitter ? (log.strikeOuts || log.SO || log.K || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
                             let summary = log.gameLogSummary || log.Summary || log.note || '';
 
@@ -3229,7 +3236,8 @@
                                 <td>${col2}</td>
                                 <td>${col3}</td>
                                 <td>${col4}</td>
-                                <td>${col5}</td>
+                                <td>${colHR}</td>
+                                <td>${colK}</td>
                                 <td>${bb}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
