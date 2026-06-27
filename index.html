@@ -2778,7 +2778,7 @@
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
-            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup'];
+            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
             tabNames.forEach((name, i) => {
                 const t = document.createElement('div');
                 t.className = `tab ${i === 0 ? 'active' : ''}`;
@@ -2991,6 +2991,186 @@
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
+        }
+
+        // ==================== MORE BOOKS TAB (Stable) ====================
+        async function renderMoreBooksTab(row, sport, contentDiv) {
+            if (sport !== 'mlb') {
+                contentDiv.innerHTML = `
+                    <div style="padding:40px 20px; text-align:center; color:#888;">
+                        <div style="font-size:18px; margin-bottom:12px;">📊 More Books</div>
+                        <p>Multi-book comparison is currently available for <strong>MLB only</strong>.<br>WNBA, NBA, and Soccer versions coming soon.</p>
+                    </div>`;
+                return;
+            }
+
+            const playerName = (row['Player Name'] || '').trim();
+            const statTypeRaw = (row['Stat Type'] || '').toLowerCase().trim();
+            const originalLine = parseFloat(row['Line Score'] || row.Line || 0);
+
+            contentDiv.innerHTML = `
+                <div style="padding:30px 20px; text-align:center;">
+                    <div style="color:#00ffcc; font-weight:600;">Loading multi-book comparison...</div>
+                    <div style="font-size:12px; color:#666; margin-top:6px;">Matching ${playerName} — ${row['Stat Type']} ${originalLine}</div>
+                </div>`;
+
+            try {
+                if (!dataStore.mlb.comboData) {
+                    const res = await fetch('https://raw.githubusercontent.com/925Sports/mlb-prop-optimizer/refs/heads/main/data/combo_data.csv');
+                    if (!res.ok) throw new Error('Could not fetch combo_data.csv');
+                    const text = await res.text();
+                    dataStore.mlb.comboData = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+                }
+
+                const data = dataStore.mlb.comboData;
+
+                const statToMarket = {
+                    'hits': 'batter_hits', 'doubles': 'batter_doubles', 'triples': 'batter_triples',
+                    'home runs': 'batter_home_runs', 'hr': 'batter_home_runs',
+                    'rbi': 'batter_rbis', 'rbis': 'batter_rbis',
+                    'runs': 'batter_runs_scored', 'runs scored': 'batter_runs_scored',
+                    'stolen bases': 'batter_stolen_bases', 'walks': 'batter_walks',
+                    'strikeouts': 'batter_strikeouts', 'batter strikeouts': 'batter_strikeouts',
+                    'hits + runs + rbi': 'batter_hits_runs_rbis', 'hits+runs+rbis': 'batter_hits_runs_rbis', 'h+r+rbi': 'batter_hits_runs_rbis',
+                    'pitcher strikeouts': 'pitcher_strikeouts', 'pitcher hits allowed': 'pitcher_hits_allowed', 'pitcher outs': 'pitcher_outs',
+                    'fantasy score': 'fantasy_points', 'fantasy points': 'fantasy_points', 'fpts': 'fantasy_points', 'score': 'fantasy_points'
+                };
+
+                let targetMarket = statToMarket[statTypeRaw];
+                if (!targetMarket && (statTypeRaw.includes('fantasy') || statTypeRaw.includes('fpts') || statTypeRaw.includes('score'))) targetMarket = 'fantasy_points';
+                if (!targetMarket && (statTypeRaw.includes('pitcher strikeout') || statTypeRaw.includes('pitcher k'))) targetMarket = 'pitcher_strikeouts';
+                if (!targetMarket && statTypeRaw.includes('pitcher hit')) targetMarket = 'pitcher_hits_allowed';
+                if (!targetMarket && (statTypeRaw.includes('pitcher out') || statTypeRaw.includes('outs'))) targetMarket = 'pitcher_outs';
+
+                let matches = data.filter(p => {
+                    const desc = (p.description || '').toLowerCase();
+                    const market = (p.market || '').toLowerCase();
+                    const pointVal = parseFloat(p.point);
+                    const lastName = playerName.split(/\s+/).pop().toLowerCase();
+                    const firstName = playerName.split(/\s+/)[0].toLowerCase();
+                    const playerMatch = desc.includes(lastName) || (firstName.length > 2 && desc.includes(firstName)) ||
+                                        playerName.toLowerCase().split(/\s+/).some(w => w.length > 2 && desc.includes(w));
+                    let marketMatch = false;
+                    if (targetMarket) {
+                        marketMatch = market === targetMarket || market.includes(targetMarket) || targetMarket.includes(market);
+                    } else {
+                        const keywords = statTypeRaw.split(/\s+/).filter(w => w.length > 3);
+                        marketMatch = keywords.some(kw => market.includes(kw));
+                    }
+                    const lineMatch = !isNaN(pointVal) && Math.abs(pointVal - originalLine) < 1.1;
+                    return playerMatch && marketMatch && lineMatch;
+                });
+
+                if (matches.length === 0) {
+                    const allForProp = data.filter(p => {
+                        const desc = (p.description || '').toLowerCase();
+                        const market = (p.market || '').toLowerCase();
+                        const lastName = playerName.split(/\s+/).pop().toLowerCase();
+                        const firstName = playerName.split(/\s+/)[0].toLowerCase();
+                        const playerMatch = desc.includes(lastName) || (firstName.length > 2 && desc.includes(firstName)) ||
+                                            playerName.toLowerCase().split(/\s+/).some(w => w.length > 2 && desc.includes(w));
+                        let marketMatch = false;
+                        if (targetMarket) marketMatch = market.includes(targetMarket);
+                        else {
+                            const keywords = statTypeRaw.split(/\s+/).filter(w => w.length > 3);
+                            marketMatch = keywords.some(kw => market.includes(kw));
+                        }
+                        return playerMatch && marketMatch;
+                    });
+                    if (allForProp.length > 0) {
+                        allForProp.sort((a, b) => Math.abs(parseFloat(a.point) - originalLine) - Math.abs(parseFloat(b.point) - originalLine));
+                        const closest = parseFloat(allForProp[0].point);
+                        matches = allForProp.filter(p => parseFloat(p.point) === closest);
+                    }
+                }
+
+                if (matches.length === 0) {
+                    contentDiv.innerHTML = `
+                        <div style="padding:20px; color:#ccc; font-size:13px;">
+                            <strong>No multi-book lines found</strong> for this exact line.<br><br>
+                            <div style="font-size:12px; color:#888;">
+                                We looked for <strong>${playerName}</strong> — <strong>${row['Stat Type']}</strong> near line <strong>${originalLine}</strong>.<br>
+                                Your combo data may have this prop at a slightly different line.<br><br>
+                                Try checking a nearby line or let me know the exact player + stat and I can improve the matching.
+                            </div>
+                        </div>`;
+                    return;
+                }
+
+                const byBook = {};
+                matches.forEach(p => {
+                    const book = p.bookmaker || 'Unknown';
+                    const edge = parseFloat(p['Max No-Vig Diff'] || p['Adjusted % Edge'] || 0);
+                    if (!byBook[book] || edge > (parseFloat(byBook[book]['Max No-Vig Diff'] || byBook[book]['Adjusted % Edge'] || 0))) {
+                        byBook[book] = p;
+                    }
+                });
+
+                const sortedBooks = Object.keys(byBook).sort((a, b) => {
+                    const edgeA = parseFloat(byBook[a]['Max No-Vig Diff'] || byBook[a]['Adjusted % Edge'] || 0);
+                    const edgeB = parseFloat(byBook[b]['Max No-Vig Diff'] || byBook[b]['Adjusted % Edge'] || 0);
+                    return edgeB - edgeA;
+                });
+
+                const first = matches[0];
+                const truePrice = first['True Price'] || first['True Point Average Line'] || '';
+                const likelihood = first['True Point Average Line'] || first['Average No-Vig Over %'] || first['No-Vig Over %'] || '';
+
+                let headerExtra = '';
+                if (truePrice || likelihood) {
+                    headerExtra = `<div style="margin-top:4px; font-size:12px; color:#aaa;">
+                        True Price: <span style="color:#fff; font-weight:600;">${truePrice}</span> &nbsp;&nbsp; 
+                        Likelihood: <span style="color:#fff; font-weight:600;">${likelihood}</span>
+                    </div>`;
+                }
+
+                let html = `<div style="padding:12px 8px 0;">
+                    <div style="margin-bottom:6px; font-weight:600; color:#fff; font-size:15px;">
+                        ${playerName} — ${row['Stat Type']} ${originalLine} 
+                        <span style="color:#666; font-size:12px;">(${sortedBooks.length} books)</span>
+                    </div>
+                    ${headerExtra}
+                    <table style="width:100%; font-size:11.5px; text-align:center; margin-top:8px;">
+                        <thead><tr style="background:#222; position:sticky; top:0;">
+                            <th style="padding:6px 4px; text-align:center;">Book</th>
+                            <th style="padding:6px 4px; text-align:center;">Over</th>
+                            <th style="padding:6px 4px; text-align:center;">Under</th>
+                            <th style="padding:6px 4px; text-align:center;">Over %</th>
+                            <th style="padding:6px 4px; text-align:center;">Under %</th>
+                            <th style="padding:6px 4px; text-align:center;">No-Vig O%</th>
+                            <th style="padding:6px 4px; text-align:center;">No-Vig U%</th>
+                            <th style="padding:6px 4px; text-align:center;">Edge</th>
+                        </tr></thead><tbody>`;
+
+                sortedBooks.forEach(book => {
+                    const p = byBook[book];
+                    const over = p['Over Price'] || '-';
+                    const under = p['Under Price'] || '-';
+                    const overPct = p['Over %'] || p['Average Over %'] || '-';
+                    const underPct = p['Under %'] || p['Average Under %'] || '-';
+                    const noVigOver = p['No-Vig Over %'] || p['Average No-Vig Over %'] || '-';
+                    const noVigUnder = p['No-Vig Under %'] || p['Average No-Vig Under %'] || '-';
+                    const edge = parseFloat(p['Max No-Vig Diff'] || p['Adjusted % Edge'] || 0);
+                    const edgeColor = edge > 0 ? '#22c55e' : (edge < 0 ? '#ef4444' : '#aaa');
+
+                    html += `<tr style="border-bottom:1px solid #333;">
+                        <td style="padding:5px 4px; font-weight:600; text-align:center;">${book}</td>
+                        <td style="padding:5px 4px; text-align:center; font-family:monospace;">${over}</td>
+                        <td style="padding:5px 4px; text-align:center; font-family:monospace;">${under}</td>
+                        <td style="padding:5px 4px; text-align:center;">${overPct}</td>
+                        <td style="padding:5px 4px; text-align:center;">${underPct}</td>
+                        <td style="padding:5px 4px; text-align:center;">${noVigOver}</td>
+                        <td style="padding:5px 4px; text-align:center;">${noVigUnder}</td>
+                        <td style="padding:5px 4px; text-align:center; font-weight:700; color:${edgeColor};">${edge.toFixed(1)}%</td>
+                    </tr>`;
+                });
+
+                html += `</tbody></table></div>`;
+                contentDiv.innerHTML = html;
+
+            } catch (err) {
+                contentDiv.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Error: ${err.message}</div>`;
+            }
         }
 
         // ==================== EDGE EXPLANATION MODAL ====================
@@ -3660,6 +3840,8 @@
                 content.innerHTML = h;
             } else if (tab === 'Matchup') {
                 content.innerHTML = `<div style="padding:12px;"><strong>Opponent:</strong> ${row.Opp || row['Opponent'] || 'N/A'}<br><strong>DVP Rank:</strong> ${row['DVP Rank'] || row['DVP'] || '-'}<br><strong>Spread / O/U:</strong> ${row['Spread'] || '-'} / ${row['O/U'] || '-'}</div>`;
+            } else if (tab === 'More Books') {
+                renderMoreBooksTab(row, sport, content);
             }
         }
 
