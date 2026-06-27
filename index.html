@@ -1012,20 +1012,14 @@
                     return calculateFantasyScore(log, sport);
                 }
 
-                // Explicit early guard for Pitcher Strikeouts / Pitcher K props to prevent substring false-positives (e.g. "er" in "pitcher")
-                if (lowerStat.includes('pitcher strikeout') || lowerStat.includes('pitcher k') || 
-                    (lowerStat.includes('strikeout') && lowerStat.includes('pitcher')) ||
-                    lowerStat === 'strikeouts' || lowerStat === 'k') {
-                    return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || log['K'] || 0);
-                }
-
-                const isPitcher = lowerStat.includes('pitcher') || lowerStat.includes('strikeout') || lowerStat.includes('ip') || lowerStat.includes('er') || lowerStat.includes('earned run') || 
-                                  (log.position || '').toUpperCase().includes('P') || (log.Pos || '').toUpperCase().includes('P');
+                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
+                                  lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
+                                  lowerStat.includes('strikeout') || lowerStat.includes('earned run');
 
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || log['Strikeouts'] || log['K'] || 0);
-                    if (lowerStat.includes('earned') || lowerStat.includes(' er') || lowerStat.includes('earned run')) return parseFloat(log.earnedRuns || log.ER || 0);
+                    if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
@@ -2784,7 +2778,7 @@
             // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
-            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup'];
+            const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
             tabNames.forEach((name, i) => {
                 const t = document.createElement('div');
                 t.className = `tab ${i === 0 ? 'active' : ''}`;
@@ -2999,6 +2993,127 @@
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
+        // ==================== MORE BOOKS TAB (MLB Multi-Sportsbook Comparison) ====================
+        async function renderMoreBooksTab(row, sport, contentDiv) {
+            if (sport !== 'mlb') {
+                contentDiv.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center; color: #888;">
+                        <div style="font-size: 18px; margin-bottom: 12px;">📊 More Books</div>
+                        <p>Multi-book line comparison is currently available for <strong>MLB only</strong>.<br>
+                        WNBA, NBA, and Soccer versions are coming soon.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            contentDiv.innerHTML = `
+                <div style="padding: 30px 20px; text-align: center;">
+                    <div style="color: #00ffcc; font-weight: 600;">Loading multi-book data...</div>
+                    <div style="font-size: 13px; color: #666; margin-top: 8px;">Fetching lines from all sportsbooks...</div>
+                </div>
+            `;
+
+            try {
+                // Cache the combo data
+                if (!dataStore.mlb.comboData) {
+                    const res = await fetch('https://raw.githubusercontent.com/925Sports/mlb-prop-optimizer/main/combo_data.csv');
+                    if (!res.ok) throw new Error('Failed to load combo data');
+                    const text = await res.text();
+                    dataStore.mlb.comboData = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+                }
+
+                const comboData = dataStore.mlb.comboData;
+                const playerName = row['Player Name'] || '';
+                const statType = (row['Stat Type'] || '').toLowerCase();
+                const line = parseFloat(row['Line Score'] || row.Line || 0);
+
+                // Filter matching props (player name in description + similar market/stat)
+                const matches = comboData.filter(p => {
+                    const desc = (p.description || '').toLowerCase();
+                    const market = (p.market || '').toLowerCase();
+                    const hasPlayer = desc.includes(playerName.toLowerCase().split(' ').pop()) || 
+                                      normalizeName(desc).includes(normalizeName(playerName));
+                    const hasStat = market.includes(statType.replace(/\s+/g, '')) || 
+                                    desc.includes(statType) || 
+                                    (statType.includes('strikeout') && market.includes('strikeout')) ||
+                                    (statType.includes('hit') && market.includes('hit'));
+                    return hasPlayer && hasStat && parseFloat(p.point) === line;
+                });
+
+                if (matches.length === 0) {
+                    contentDiv.innerHTML = `
+                        <div style="padding: 30px 20px; text-align: center; color: #888;">
+                            No multi-book data found for this exact prop.<br>
+                            <span style="font-size:12px;">Try a more common market or check back later.</span>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Group by bookmaker and pick best lines
+                const byBook = {};
+                matches.forEach(p => {
+                    const book = p.bookmaker || 'Unknown';
+                    if (!byBook[book]) byBook[book] = [];
+                    byBook[book].push(p);
+                });
+
+                let html = `
+                    <div style="padding: 12px 8px 0;">
+                        <div style="margin-bottom: 12px; font-size: 15px; font-weight: 600; color: #fff;">
+                            ${playerName} — ${row['Stat Type']} ${line} <span style="color:#888; font-size:13px;">(across ${Object.keys(byBook).length} books)</span>
+                        </div>
+                        <div class="table-wrapper" style="max-height: 420px; overflow-y: auto;">
+                            <table style="font-size: 12.5px; width: 100%;">
+                                <thead>
+                                    <tr style="background:#222; position: sticky; top: 0;">
+                                        <th style="text-align:left; padding:8px 10px;">Book</th>
+                                        <th style="text-align:right; padding:8px 10px;">Over</th>
+                                        <th style="text-align:right; padding:8px 10px;">Under</th>
+                                        <th style="text-align:right; padding:8px 10px;">No-Vig %</th>
+                                        <th style="text-align:right; padding:8px 10px;">Edge %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                Object.keys(byBook).sort().forEach(book => {
+                    const entries = byBook[book];
+                    // Pick the best edge entry for this book
+                    entries.sort((a, b) => (parseFloat(b['Max No-Vig Diff']) || 0) - (parseFloat(a['Max No-Vig Diff']) || 0));
+                    const best = entries[0];
+
+                    const overP = best['Over Price'] || '-';
+                    const underP = best['Under Price'] || '-';
+                    const noVig = best['No-Vig Over %'] || best['Average No-Vig Over %'] || '-';
+                    const edge = parseFloat(best['Max No-Vig Diff'] || best['Adjusted % Edge'] || 0);
+
+                    const edgeColor = edge > 0 ? '#22c55e' : (edge < 0 ? '#ef4444' : '#aaa');
+
+                    html += `
+                        <tr style="border-bottom: 1px solid #333;">
+                            <td style="padding: 8px 10px; font-weight: 600;">${book}</td>
+                            <td style="padding: 8px 10px; text-align: right; font-family: monospace;">${overP}</td>
+                            <td style="padding: 8px 10px; text-align: right; font-family: monospace;">${underP}</td>
+                            <td style="padding: 8px 10px; text-align: right; font-family: monospace;">${noVig}</td>
+                            <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: ${edgeColor};">${edge.toFixed(1)}%</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div></div>`;
+                contentDiv.innerHTML = html;
+
+            } catch (err) {
+                contentDiv.innerHTML = `
+                    <div style="padding: 30px 20px; text-align: center; color: #ef4444;">
+                        Failed to load multi-book data.<br>
+                        <span style="font-size:12px; color:#888;">${err.message}</span>
+                    </div>
+                `;
+            }
+        }
+
         // ==================== EDGE EXPLANATION MODAL ====================
         function showEdgeExplanationModal() {
             const existing = document.getElementById('edgeExplanationModal');
@@ -3192,7 +3307,7 @@
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
                     if (sport === 'mlb') {
-                        html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR</th><th>K</th><th>BB</th><th>FP</th><th>Summary</th>`;
+                        html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR/K</th><th>BB</th><th>FP</th><th>Summary</th>`;
                     } else {
                         html += `<th>Date</th><th>Opp</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>FP</th>`;
                     }
@@ -3224,8 +3339,7 @@
                             let col2 = isHitter ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
                             let col3 = isHitter ? (log.runs || log.R || 0) : '-';
                             let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
-                            let colHR = isHitter ? (log.homeRuns || log.HR || 0) : '-';
-                            let colK = isHitter ? (log.strikeOuts || log.SO || log.K || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                            let col5 = isHitter ? (log.homeRuns || log.HR || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
                             let summary = log.gameLogSummary || log.Summary || log.note || '';
 
@@ -3236,8 +3350,7 @@
                                 <td>${col2}</td>
                                 <td>${col3}</td>
                                 <td>${col4}</td>
-                                <td>${colHR}</td>
-                                <td>${colK}</td>
+                                <td>${col5}</td>
                                 <td>${bb}</td>
                                 <td style="color:#00ffcc;font-weight:700">${fp}</td>
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
@@ -3668,6 +3781,8 @@
                 content.innerHTML = h;
             } else if (tab === 'Matchup') {
                 content.innerHTML = `<div style="padding:12px;"><strong>Opponent:</strong> ${row.Opp || row['Opponent'] || 'N/A'}<br><strong>DVP Rank:</strong> ${row['DVP Rank'] || row['DVP'] || '-'}<br><strong>Spread / O/U:</strong> ${row['Spread'] || '-'} / ${row['O/U'] || '-'}</div>`;
+            } else if (tab === 'More Books') {
+                renderMoreBooksTab(row, sport, content);
             }
         }
 
