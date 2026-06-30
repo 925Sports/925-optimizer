@@ -3366,7 +3366,18 @@
                 } else if (sport === 'mlb') {
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     
-                    const isHitter = !(row.Position || row.Pos || '').toUpperCase().includes('P') && !row['Stat Type'].toLowerCase().includes('pitcher');
+                    // Improved pitcher/hitter classification for Splits (fixes Pitcher Strikeouts, ER, IP, etc.)
+                    const statLower = (row['Stat Type'] || '').toLowerCase();
+                    const posUpper = (row.Position || row.Pos || '').toUpperCase();
+                    const isPitcherProp = posUpper.includes('P') || 
+                        statLower.includes('pitcher') || 
+                        statLower.includes('ip') || 
+                        statLower.includes('earned') || 
+                        statLower.includes('strikeout') || 
+                        statLower.includes(' k') || 
+                        statLower.includes('so');
+                    const isHitter = !isPitcherProp;
+
                     if (isHitter) {
                         playerLogs = playerLogs.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
                     } else {
