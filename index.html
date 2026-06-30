@@ -1021,8 +1021,11 @@
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
                     if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) {
-                        // Prefer pitching strikeouts when it looks like a pitching appearance or the prop is pitcher-specific
-                        if (looksLikePitcherLog || lowerStat.includes('pitcher')) {
+                        // For any prop whose name contains both "pitcher" and "strikeout", or when the log looks like a pitcher outing,
+                        // always return the pitching strikeouts field. This ensures "Pitcher Strikeouts" props never accidentally
+                        // return IP, AB, or batting strikeouts.
+                        const isPitcherStrikeoutProp = lowerStat.includes('pitcher') && lowerStat.includes('strikeout');
+                        if (isPitcherStrikeoutProp || looksLikePitcherLog || lowerStat.includes('pitcher')) {
                             return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                         } else {
                             return parseFloat(log.strikeOuts || log.K || 0);
@@ -3410,7 +3413,19 @@
                             let col3 = isHitter ? (log.runs || log.R || 0) : '-';
                             let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
                             let hrVal = isHitter ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
-                            let kVal = isHitter ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+
+                            // For Pitcher Strikeouts props, always prefer the pitching strikeouts field (strikeOutsPitching)
+                            // even if the individual game log row has incomplete position/IP data. This prevents
+                            // showing IP/AB or batting strikeouts instead of the correct pitcher K value.
+                            const isPitcherStrikeoutProp = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
+                                                           (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
+                            let kVal;
+                            if (isPitcherStrikeoutProp) {
+                                kVal = parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                            } else {
+                                kVal = isHitter ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                            }
+
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
                             let summary = log.gameLogSummary || log.Summary || log.note || '';
 
