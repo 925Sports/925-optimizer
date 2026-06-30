@@ -902,7 +902,7 @@
     </div>
 
     <script>
-        // ==================== GLOBAL STATE ==================== 
+        // ==================== GLOBAL STATE ====================
         let currentSport = 'all';
         let dataStore = {
             nba: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
@@ -914,7 +914,6 @@
         let currentFiltered = [];
         let currentChart = null;
         let currentRowIndex = 0;
-        let currentPopupSport = '';
         let betSlipsSortColumn = 'Edge';
         let betSlipsSortDirection = 'desc';
         let selectedPayout = 'all';
@@ -924,10 +923,12 @@
         const selectedToggle = document.getElementById('selectedToggle');
         const oddsSelect = document.getElementById('oddsSelect');
         const viewSelect = document.getElementById('viewSelect');
+        const oddsToggle = document.getElementById('oddsToggle');
         const tabsDiv = document.getElementById('tabs');
 
         // ==================== PROFESSIONAL TOAST SYSTEM ====================
         function showToast(message, type = 'info') {
+            // Remove any existing toasts
             document.querySelectorAll('.toast').forEach(t => t.remove());
 
             const toast = document.createElement('div');
@@ -946,10 +947,12 @@
             
             document.body.appendChild(toast);
 
+            // Show with animation
             requestAnimationFrame(() => {
                 toast.classList.add('show');
             });
 
+            // Auto dismiss after 4 seconds
             const autoDismiss = setTimeout(() => {
                 if (toast.parentNode) {
                     toast.classList.remove('show');
@@ -957,6 +960,7 @@
                 }
             }, 4000);
 
+            // Close button
             toast.querySelector('.toast-close').onclick = () => {
                 clearTimeout(autoDismiss);
                 toast.classList.remove('show');
@@ -968,10 +972,11 @@
         function normalizeName(name) {
             if (!name) return '';
             let n = name.toLowerCase()
-                .replace(/[^a-z0-9\s]/g, ' ')
+                .replace(/[^a-z0-9\s]/g, ' ')           // keep spaces
                 .replace(/\s+/g, ' ')
                 .trim();
 
+            // Common name normalizations (from original single-sport tools)
             n = n.replace(/\bjr\b/g, '')
                  .replace(/\bsr\b/g, '')
                  .replace(/\biii\b/g, '')
@@ -988,6 +993,7 @@
             if (n1 === n2) return true;
             if (n1.includes(n2) || n2.includes(n1)) return true;
 
+            // Extra fuzzy: last name match if first names are close
             const parts1 = logName.toLowerCase().split(/\s+/);
             const parts2 = playerName.toLowerCase().split(/\s+/);
             if (parts1.length > 1 && parts2.length > 1) {
@@ -997,7 +1003,6 @@
             }
             return false;
         }
-
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
             if (sport === 'mlb') {
@@ -1014,12 +1019,13 @@
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so') || lowerStat.includes('pitcher strikeout')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so') || lowerStat.includes('pitcher strikeouts')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log['Strikeouts'] || log.K || log.SO || log['SO'] || 0);
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
                     if (lowerStat.includes('h+r+rbi') || lowerStat.includes('hrrbi')) return (parseFloat(log.hits||0) + parseFloat(log.runs||0) + parseFloat(log.rbi||0));
                 } else {
+                    // Hitter logic
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hits || log.H || 0);
                     if (lowerStat.includes('home run') || lowerStat.includes('hr')) return parseFloat(log.homeRuns || log.HR || 0);
                     if (lowerStat.includes('rbi')) return parseFloat(log.rbi || log.RBI || 0);
@@ -1035,6 +1041,7 @@
                 }
                 return 0;
             } else if (sport === 'soccer') {
+                // Soccer stats from prop CSV or future game logs
                 const lowerStat = s;
                 if (lowerStat.includes('fantasy score') && lowerStat.includes('outfield')) {
                     return parseFloat(log['Outfield Fantasy Score'] || log.outfieldFantasyScore || log['OutfieldFantasyScore'] || 0);
@@ -1055,8 +1062,10 @@
                 if (lowerStat.includes('goal') && !lowerStat.includes('allowed')) return parseFloat(log.Goals || log.goals || log['Goals'] || 0);
                 if (lowerStat.includes('goal') && lowerStat.includes('allowed')) return parseFloat(log['Goals Allowed'] || log.goalsAllowed || log['GoalsAllowed'] || 0);
                 if (lowerStat.includes('assist')) return parseFloat(log['Shots Assisted'] || log.shotsAssisted || log['ShotsAssisted'] || 0);
+                // Fallback
                 return parseFloat(log[statType] || log[statType.toUpperCase()] || log[lowerStat.replace(/\s+/g, '')] || 0) || 0;
             } else {
+                // NBA / WNBA
                 if (s.includes('point') && !s.includes('+')) return parseFloat(log.PTS || log.points || 0);
                 if (s.includes('rebound') && !s.includes('+')) return parseFloat(log.REB || log.rebounds || 0);
                 if (s.includes('assist') && !s.includes('+')) return parseFloat(log.AST || log.assists || 0);
@@ -1075,7 +1084,7 @@
                     const stl = parseFloat(log.STL || 0);
                     const blk = parseFloat(log.BLK || 0);
                     const tov = parseFloat(log.TOV || 0);
-                    return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov * 1;
+                    return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov * 1; // common DFS scoring
                 }
                 if (s.includes('steal')) return parseFloat(log.STL || 0);
                 if (s.includes('block')) return parseFloat(log.BLK || 0);
@@ -1099,6 +1108,7 @@
                 return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov;
             }
 
+            // MLB Fantasy Score calculation (from original MLB code)
             const isHitter = parseFloat(log.atBats || log.AB || 0) > 0;
 
             if (isHitter) {
@@ -1113,6 +1123,7 @@
                 const sb = parseFloat(log.stolenBases || log.SB || 0);
                 return (singles * 3) + (doubles * 5) + (triples * 8) + (hr * 10) + (runs * 2) + (rbi * 2) + (bb * 2) + (hbp * 2) + (sb * 5);
             } else {
+                // Pitcher
                 const ip = parseFloat(log.inningsPitched || log.IP || 0);
                 const outs = ip * 3;
                 const er = parseFloat(log.earnedRuns || log.ER || 0);
@@ -1138,10 +1149,14 @@
                 </div>
             `;
 
+            // ==================== GAME LOG CONFIG (Phase 2) ====================
+            // Priority: Local data/ folder > Remote URL
+            // For NBA game logs you are using Google Sheets — replace the nba.logs URL below with your published CSV link.
+            // MLB is using GitHub raw (as currently in play).
             const urls = {
                 nba: { 
                     pp: './data/prizepicks-nba.csv', 
-                    logs: './data/nba_game_logs.csv'
+                    logs: './data/nba_game_logs.csv'   // Local first (recommended). Change to your Google Sheets published CSV if preferred.
                 },
                 wnba: { 
                     pp: './data/prizepicks-wnba.csv', 
@@ -1153,7 +1168,7 @@
                 },
                 soccer: { 
                     pp: './data/prizepicks-soccer.csv', 
-                    logs: '' 
+                    logs: ''  // No game logs CSV yet for soccer; Splits/Game Log tabs will show placeholder
                 }
             };
 
@@ -1172,23 +1187,28 @@
                 if (mlbRes.status === 'fulfilled') dataStore.mlb.allData = Papa.parse(mlbRes.value, { header: true, skipEmptyLines: true }).data;
                 if (soccerRes.status === 'fulfilled') dataStore.soccer.allData = Papa.parse(soccerRes.value, { header: true, skipEmptyLines: true }).data;
 
+                // Ensure odds type defaults to Standard on load
                 ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                     if (!dataStore[s].currentOddsType) dataStore[s].currentOddsType = 'standard';
                 });
 
+                // Prepare each sport
                 ['nba', 'wnba', 'mlb', 'soccer'].forEach(sport => prepareSportData(sport));
 
+                // Restore selectedBets from localStorage if any
                 try {
                     const saved = localStorage.getItem('pp_selectedBets');
                     if (saved) selectedBets = JSON.parse(saved);
                 } catch(e){}
 
+                // Initial render
                 currentSport = 'all';
                 updateSportTabs();
                 initCurrentSport();
                 updateBetSlipCount();
                 updateStandardBetsCount();
 
+                // Show welcome if no data
                 const totalRows = dataStore.nba.allData.length + dataStore.wnba.allData.length + dataStore.mlb.allData.length;
                 if (totalRows === 0) {
                     contentDiv.innerHTML = '<div class="loading" style="color:#f59e0b; max-width: 520px; margin: 40px auto; line-height: 1.5;">No prop data loaded.<br><br><strong>How to set up your data:</strong><br>1. Put the 3 prop CSVs in a <code>data/</code> folder<br>2. Refresh the page<br><br>Game logs now load on-demand when you open a player (much faster initial load).</div>';
@@ -1205,15 +1225,18 @@
             const data = store.allData || [];
             if (!data.length) return;
 
+            // Unique values
             store.uniqueGames = [...new Set(data.map(r => r['Game Short Title'] || r.Game || '').filter(Boolean))].sort();
             store.uniqueTeams = [...new Set(data.map(r => r.Team || '').filter(Boolean))].sort();
             store.uniqueCallouts = [...new Set(data.map(r => (r['Callout Bet Tag'] || '').trim()).filter(Boolean))].sort();
             if (sport === 'soccer') {
+                // Include empty Bet Tag so all soccer props are selectable by default
                 store.uniqueBetTags = [...new Set(data.map(r => (r['Bet Tag'] || '').trim()))].sort();
             } else {
                 store.uniqueBetTags = [...new Set(data.map(r => (r['Bet Tag'] || '').trim()).filter(Boolean))].sort();
             }
 
+            // Init selections
             store.selectedGames = new Set(store.uniqueGames);
             store.selectedTeams = new Set(store.uniqueTeams);
             store.selectedCallouts = new Set(store.uniqueCallouts);
@@ -1222,21 +1245,26 @@
             store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
             store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
 
+            // Soccer: start advanced filters deselected so all props show by default
             if (sport === 'soccer') {
                 store.selectedBetTags = new Set();
                 store.selectedFav = new Set();
                 store.selectedGameTypes = new Set();
             }
 
+            // No heavy game log precomputation on initial load for speed.
+            // L5 stats + game logs are now calculated on-demand when user opens a player popup.
             data.forEach(row => {
                 row._sport = sport;
             });
         }
 
+        // On-demand game log loader (key for fast initial load)
         async function ensureGameLogsLoaded(sport) {
             const store = dataStore[sport];
-            if (store.gameLogs && store.gameLogs.length > 0) return;
+            if (store.gameLogs && store.gameLogs.length > 0) return; // already loaded
 
+            // Try local first, then remote
             const localUrl = `./data/${sport}_game_logs.csv`;
             let gameLogText = '';
 
@@ -1245,6 +1273,7 @@
                 if (res.ok) {
                     gameLogText = await res.text();
                 } else {
+                    // Fallback to configured remote URL
                     const remoteUrl = (sport === 'mlb') 
                         ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/refs/heads/main/mlb_2026_season_game_logs.csv'
                         : (sport === 'nba' 
@@ -1263,6 +1292,7 @@
                 store.gameLogs = Papa.parse(gameLogText, { header: true, skipEmptyLines: true }).data;
                 console.log(`Loaded ${store.gameLogs.length} game logs for ${sport}`);
 
+                // Build fast lookup cache: normalized name -> array of logs
                 store.playerLogCache = new Map();
                 store.gameLogs.forEach(log => {
                     const rawName = log.PLAYER || log['Player Name'] || log.fullName || log['fullName'] || '';
@@ -1275,6 +1305,7 @@
         }
 
         function initCurrentSport() {
+            // Hide advanced filters on "All" tab for better UX (customer-facing)
             const filterBtnEl = document.getElementById('filterBtn');
             const calloutFilterBtnEl = document.getElementById('calloutFilterBtn');
             if (currentSport === 'all') {
@@ -1282,8 +1313,11 @@
                 if (calloutFilterBtnEl) calloutFilterBtnEl.style.display = 'none';
                 const advBtn = document.getElementById('advancedFilterBtn');
                 if (advBtn) advBtn.style.display = 'none';
+                // Build stat type tabs also for All (combined from all sports)
                 buildStatTabs();
                 renderAllView();
+
+                // Update subtle All-tab info badge in top header (non-disruptive location)
                 updateAllTabHeaderInfo();
             } else {
                 if (filterBtnEl) filterBtnEl.style.display = '';
@@ -1296,6 +1330,8 @@
                     return;
                 }
 
+                // When switching to an individual sport tab, reset all filters to "show everything"
+                // so the user always sees the full set of props for that sport (unless they explicitly filter).
                 if (store.uniqueGames && store.uniqueGames.length) store.selectedGames = new Set(store.uniqueGames);
                 if (store.uniqueTeams && store.uniqueTeams.length) store.selectedTeams = new Set(store.uniqueTeams);
                 if (store.uniqueCallouts && store.uniqueCallouts.length) store.selectedCallouts = new Set(store.uniqueCallouts);
@@ -1303,22 +1339,30 @@
                 store.selectedFav = new Set(['Yes', 'No']);
                 store.selectedGameTypes = new Set(['High', 'Normal', 'Low']);
                 store.selectedHotCold = new Set(['Hot', 'Cold', 'Neutral']);
-                store.selectedStatTypes = new Set();
+                store.selectedStatTypes = new Set(); // start with "All" stat types
 
+                // For Soccer tab: start advanced filters (Bet Tag / Fav / O/U) deselected by default.
+                // This makes the tab show ALL soccer props initially (matching what user discovered),
+                // while still allowing the popup to work when they want to filter.
                 if (currentSport === 'soccer') {
                     store.selectedBetTags = new Set();
                     store.selectedFav = new Set();
                     store.selectedGameTypes = new Set();
                 }
 
+                // Reset search & view for cleanliness
                 searchInput.value = store.searchTerm || '';
                 viewSelect.value = store.currentView;
                 selectedToggle.checked = store.showSelectedOnly;
 
+                // Rebuild stat type tabs
                 buildStatTabs();
+
+                // Render
                 renderContent();
             }
 
+            // Always attach listeners (safe to call multiple times)
             attachControlListeners();
         }
 
@@ -1332,6 +1376,7 @@
                     updateSportTabs();
                     initCurrentSport();
 
+                    // Hide advanced filter button on All tab (it only works per-sport)
                     const advBtn = document.getElementById('advancedFilterBtn');
                     if (advBtn) {
                         advBtn.style.display = (currentSport === 'all') ? 'none' : '';
@@ -1340,6 +1385,7 @@
             });
         }
 
+        // Subtle info badge for All tab - placed in top header so it doesn't disrupt card flow
         function updateAllTabHeaderInfo() {
             const infoEl = document.getElementById('allTabInfo');
             const textEl = document.getElementById('allTabInfoText');
@@ -1350,6 +1396,7 @@
                 return;
             }
 
+            // Recompute current filtered count (lightweight)
             let allRows = [];
             ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
@@ -1393,6 +1440,7 @@
             let store, data;
 
             if (isAll) {
+                // Combine data from all sports for stat type tabs on "All" view
                 data = [];
                 ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
                     if (dataStore[s] && dataStore[s].allData) {
@@ -1410,8 +1458,10 @@
 
             let statTypes = [...new Set(data.map(r => (r['Stat Type'] || '').trim()).filter(Boolean))].sort();
 
+            // Limit to most common for cleanliness (increased to 20 so Outfield Fantasy Score etc. appear on Soccer)
             if (statTypes.length > 20) statTypes = statTypes.slice(0, 20);
 
+            // "All" button clears selection
             const allBtn = document.createElement('div');
             allBtn.className = `tab ${store.selectedStatTypes.size === 0 ? 'active' : ''}`;
             allBtn.textContent = 'All';
@@ -1436,6 +1486,7 @@
                         store.selectedStatTypes.add(stat);
                         btn.classList.add('active');
                     }
+                    // Deactivate "All" if any specific is selected
                     const allTab = tabsDiv.querySelector('.tab');
                     if (allTab) allTab.classList.remove('active');
                     if (isAll) renderAllView(); else renderContent();
@@ -1456,6 +1507,7 @@
                 searchInput.value = '';
                 store.searchTerm = '';
             } else if (type === 'highEdge') {
+                // Filter to high edge by temporarily setting a high threshold (we'll filter in render)
                 store.tempHighEdgeFilter = true;
             } else if (type === 'demon') {
                 store.currentOddsType = 'demon';
@@ -1467,6 +1519,7 @@
         }
 
         function attachControlListeners() {
+            // Search
             searchInput.oninput = () => {
                 if (currentSport === 'all') {
                     renderAllView();
@@ -1477,6 +1530,7 @@
                 }
             };
 
+            // View select - fully supports Table view on All tab
             viewSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
@@ -1486,6 +1540,7 @@
                 }
             };
 
+            // Selected only
             selectedToggle.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
@@ -1495,6 +1550,7 @@
                 }
             };
 
+            // Odds type select (dropdown only now)
             oddsSelect.onchange = () => {
                 if (currentSport === 'all') {
                     renderAllView();
@@ -1506,11 +1562,13 @@
                 }
             };
 
+            // Filter buttons
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
             document.getElementById('calloutFilterBtn').onclick = () => showCalloutFilterPopup();
             document.getElementById('advancedFilterBtn').onclick = () => showAdvancedFilterPopup();
             document.getElementById('betslipBtn').onclick = () => showBetSlipPopup();
 
+            // Clear Bets button (clears persisted selectedBets from localStorage)
             const clearBetsBtn = document.getElementById('clearBetsBtn');
             if (clearBetsBtn) {
                 clearBetsBtn.onclick = () => {
@@ -1522,12 +1580,15 @@
                     } else {
                         renderContent();
                     }
+                    // If bet slip popup is open, refresh it
                     const betSlipPopup = document.getElementById('betslipPopup');
                     if (betSlipPopup && betSlipPopup.style.display === 'block') {
                         renderBetSlipsTable();
                     }
                 };
             }
+
+            // Apply buttons for popups (defined in show functions)
         }
 
         // ==================== RENDER CONTENT ====================
@@ -1547,11 +1608,13 @@
             `;
 
             setTimeout(async () => {
+                // Ensure game logs are loaded for accurate L5/L20 stats in table view
                 if (store.currentView === 'table') {
                     await ensureGameLogsLoaded(currentSport);
                 }
                 let filtered = store.allData.filter(row => (row['Stat Type'] || '').trim() !== '');
 
+                // Multi-select Stat Type filter (case-insensitive + trim for robustness across sports/CSVs)
                 if (store.selectedStatTypes.size > 0) {
                     const selectedLower = new Set(Array.from(store.selectedStatTypes).map(s => s.toLowerCase().trim()));
                     filtered = filtered.filter(row => {
@@ -1560,10 +1623,12 @@
                     });
                 }
 
+                // Odds type
                 if (store.currentOddsType !== 'all') {
                     filtered = filtered.filter(row => (row['Odds Type'] || 'standard') === store.currentOddsType);
                 }
 
+                // Search
                 if (store.searchTerm) {
                     const term = store.searchTerm;
                     filtered = filtered.filter(row =>
@@ -1573,6 +1638,10 @@
                     );
                 }
 
+                // Game / Team / Callout filters for Soccer
+                // Default behavior: Show ALL soccer props (start with everything visible).
+                // Only apply these filters if the user has actively opened a filter popup and deselected items
+                // (i.e. the selected set is smaller than the full unique list).
                 if (currentSport === 'soccer') {
                     const gamesFull = !store.uniqueGames || store.selectedGames.size >= store.uniqueGames.length;
                     const teamsFull = !store.uniqueTeams || store.selectedTeams.size >= store.uniqueTeams.length;
@@ -1591,6 +1660,7 @@
                         return gameOk && teamOk && calloutOk;
                     });
                 } else {
+                    // Normal strict filtering for other sports
                     filtered = filtered.filter(row => {
                         const gameTitle = row['Game Short Title'] || row.Game || '';
                         const gameOk = store.selectedGames.has(gameTitle);
@@ -1605,10 +1675,12 @@
                     });
                 }
 
+                // Advanced filters for Soccer - only apply if user has actively reduced the selection from full set.
+                // This ensures Soccer tab starts with ALL props visible, and only filters when user uses the popups.
                 if (currentSport === 'soccer') {
                     const betTagsFull = !store.uniqueBetTags || store.selectedBetTags.size >= store.uniqueBetTags.length;
-                    const favFull = store.selectedFav.size >= 2;
-                    const gameTypesFull = store.selectedGameTypes.size >= 3;
+                    const favFull = store.selectedFav.size >= 2; // Yes + No
+                    const gameTypesFull = store.selectedGameTypes.size >= 3; // High + Normal + Low
 
                     if (!betTagsFull && store.selectedBetTags.size > 0) {
                         filtered = filtered.filter(row => {
@@ -1629,6 +1701,7 @@
                         });
                     }
                 } else {
+                    // Normal behavior for other sports
                     if (store.selectedBetTags.size > 0) {
                         filtered = filtered.filter(row => {
                             const bt = (row['Bet Tag'] || '').trim();
@@ -1648,6 +1721,7 @@
                         });
                     }
                 }
+                // Hot/Cold filter is not applicable to soccer (no meaningful streak data)
                 if (currentSport !== 'soccer' && store.selectedHotCold.size > 0) {
                     filtered = filtered.filter(row => {
                         const status = getHotColdStatus(row['Player Name'], currentSport);
@@ -1660,6 +1734,7 @@
                     filtered = filtered.filter(row => selectedKeys.has(`${row['Player Name']}-${row['Stat Type']}`));
                 }
 
+                // Sort
                 filtered.sort((a, b) => {
                     let aVal = parseFloat(a[store.contentSortColumn] || a['Edge %'] || 0);
                     let bVal = parseFloat(b[store.contentSortColumn] || b['Edge %'] || 0);
@@ -1686,6 +1761,7 @@
                         contentDiv.appendChild(card);
                     });
                 } else {
+                    // Full Table view implementation
                     const table = document.createElement('table');
                     table.style.width = '100%';
                     table.style.borderCollapse = 'collapse';
@@ -1758,12 +1834,14 @@
 
                     const tbody = document.createElement('tbody');
 
+                    // Precompute L5 for table - FAST using cache
                     const storeForCache = dataStore[currentSport];
                     filtered.forEach(row => {
                         const playerName = row['Player Name'];
                         const normPlayer = normalizeName(playerName);
                         let playerLogs = storeForCache.playerLogCache?.get(normPlayer) || [];
                         if (playerLogs.length === 0 && storeForCache.gameLogs?.length) {
+                            // Fallback (should rarely happen)
                             playerLogs = storeForCache.gameLogs.filter(log => 
                                 nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
                             );
@@ -1795,6 +1873,7 @@
                             l5Hit = ((hits / last5.length) * 100).toFixed(0);
                         }
 
+                        // L20 calculation
                         const last20 = playerLogs.slice(0, 20);
                         if (last20.length > 0) {
                             let sum20 = 0;
@@ -1818,6 +1897,7 @@
                         row._l20HitTable = l20Hit;
                     });
 
+                    // Apply sort if needed
                     let sortedFiltered = [...filtered];
                     if (store.contentSortColumn === 'Edge') {
                         sortedFiltered.sort((a, b) => {
@@ -1834,7 +1914,7 @@
                     } else if (store.contentSortColumn === 'PPUD') {
                         sortedFiltered.sort((a, b) => {
                             const aPP = parseFloat(a['Line Score'] || a.Line || 0);
-                            const aUD = getUnderdogLine(a);
+                            const aUD = getUnderdogLine(a); // respects Fantasy Score <= 0.3 rule + all missing cases
                             const aVal = (aUD === null || aUD === 0) ? 0 : aPP - aUD;
 
                             const bPP = parseFloat(b['Line Score'] || b.Line || 0);
@@ -1874,6 +1954,7 @@
                         tr.style.borderBottom = '1px solid #333';
                         tr.style.cursor = 'pointer';
 
+                        // Player + sport badge
                         const tdPlayer = document.createElement('td');
                         tdPlayer.style.padding = '8px';
                         tdPlayer.innerHTML = `
@@ -1889,11 +1970,13 @@
                         tdPlayer.onclick = () => showPlayerPopup(row, index, currentSport);
                         tr.appendChild(tdPlayer);
 
+                        // Stat
                         const tdStat = document.createElement('td');
                         tdStat.style.padding = '8px';
                         tdStat.textContent = row['Stat Type'] || '';
                         tr.appendChild(tdStat);
 
+                        // Edge
                         const tdEdge = document.createElement('td');
                         tdEdge.style.padding = '8px';
                         tdEdge.style.fontWeight = '700';
@@ -1905,12 +1988,16 @@
                         tdEdge.textContent = icon + (parseFloat(row['Edge %'] || 0).toFixed(1) + '%');
                         tr.appendChild(tdEdge);
 
+                        // Line
                         const tdLine = document.createElement('td');
                         tdLine.style.padding = '8px';
                         tdLine.style.fontWeight = '600';
                         tdLine.textContent = row['Line Score'] || row.Line || '-';
                         tr.appendChild(tdLine);
 
+                        // PP - UD column: Shows PrizePicks line minus Underdog line.
+                        // Shows "-" (and gray) when no valid Underdog line exists in data.
+                        // Positive = green (PP line > UD line), Negative = red (UD line > PP line).
                         const tdPPUD = document.createElement('td');
                         tdPPUD.style.padding = '8px';
                         tdPPUD.style.fontWeight = '600';
@@ -1931,6 +2018,7 @@
                         tdPPUD.style.color = numericDiff > 0 ? '#22c55e' : (numericDiff < 0 ? '#ef4444' : '#aaa');
                         tr.appendChild(tdPPUD);
 
+                        // L5 / L20 values - calculate on the fly if pre-computed values are missing (robust for MLB + all sports)
                         let l5Avg = row._l5AvgTable || '-';
                         let l5Hit = row._l5HitTable || '-';
                         let l20Avg = row._l20AvgTable || '-';
@@ -1971,26 +2059,31 @@
                             }
                         }
 
+                        // L5 Avg
                         const tdL5 = document.createElement('td');
                         tdL5.style.padding = '8px';
                         tdL5.textContent = l5Avg;
                         tr.appendChild(tdL5);
 
+                        // L5 Hit%
                         const tdL5Hit = document.createElement('td');
                         tdL5Hit.style.padding = '8px';
                         tdL5Hit.textContent = l5Hit !== '-' ? l5Hit + '%' : '-';
                         tr.appendChild(tdL5Hit);
 
+                        // L20 Avg
                         const tdL20 = document.createElement('td');
                         tdL20.style.padding = '8px';
                         tdL20.textContent = l20Avg;
                         tr.appendChild(tdL20);
 
+                        // L20 Hit%
                         const tdL20Hit = document.createElement('td');
                         tdL20Hit.style.padding = '8px';
                         tdL20Hit.textContent = l20Hit !== '-' ? l20Hit + '%' : '-';
                         tr.appendChild(tdL20Hit);
 
+                        // Actions
                         const tdActions = document.createElement('td');
                         tdActions.style.padding = '8px';
                         const actionsDiv = document.createElement('div');
@@ -2049,7 +2142,7 @@
             const statType = row['Stat Type'] || '';
             const playerName = row['Player Name'] || '';
             const team = row.Team || '';
-            const gameTitle = row['Game Short Title'] || (row.Opp ? `@ ${row.Opp}` : '');
+            const gameTitle = row['Game Short Title'] || (row.Opp ? `@ ${row.Opp}` : 'No Game');
             const betTag = (row['Bet Tag'] || '').trim();
             const oddsType = (row['Odds Type'] || 'standard').toLowerCase();
 
@@ -2095,6 +2188,7 @@
                 <div class="info-icon" title="Player Info">ℹ️</div>
             `;
 
+            // Button handlers
             const lessBtn = card.querySelector('.button.less');
             const moreBtn = card.querySelector('.button.more');
             const infoIcon = card.querySelector('.info-icon');
@@ -2115,93 +2209,77 @@
             return card;
         }
 
-        // Toggle bet and persist
         function toggleBet(row, choice, sport, cardElement = null) {
-            const key = `${row['Player Name']}-${row['Stat Type']}`;
+            const playerName = row['Player Name'];
+            const statType = row['Stat Type'];
+            const key = `${playerName}-${statType}`;
             const existingIndex = selectedBets.findIndex(b => b.key === key && b.sport === sport);
 
+            // Safer edge/prob calculation + robust ID fallbacks (helps soccer + any CSV with different headers)
+            let edgeVal = parseFloat(row['Edge %'] || row.Edge || row['edge'] || 50);
+            if (isNaN(edgeVal) || edgeVal <= 0) edgeVal = 50;
+            const safeProb = Math.min(Math.max(edgeVal / 100, 0.01), 0.99);
+
+            const betData = {
+                key,
+                player: playerName,
+                choice,
+                line: row['Line Score'] || row.Line,
+                stat: statType,
+                edge: edgeVal,
+                prob: safeProb,
+                game: row['Game Short Title'] || row.Game || row.Match || row.Fixture || 'Mixed',
+                team: row.Team,
+                sport: sport,
+                id: row.id || row.ID || row['Data ID'] || row['Player ID'] || '',
+                projectionId: row['Data ID'] || row['Projection ID'] || row.id || row.ID || ''
+            };
+
             if (existingIndex > -1) {
-                const existing = selectedBets[existingIndex];
-                if (existing.choice === choice) {
+                if (selectedBets[existingIndex].choice === choice) {
                     selectedBets.splice(existingIndex, 1);
                 } else {
-                    existing.choice = choice;
+                    selectedBets[existingIndex] = betData;
                 }
             } else {
-                const betData = {
-                    key: key,
-                    player: row['Player Name'],
-                    stat: row['Stat Type'],
-                    line: row['Line Score'] || row.Line,
-                    choice: choice,
-                    edge: parseFloat(row['Edge %'] || 0),
-                    sport: sport,
-                    game: row['Game Short Title'] || row.Game || '',
-                    team: row.Team || '',
-                    projectionId: row['Projection ID'] || row.id || ''
-                };
                 selectedBets.push(betData);
             }
 
-            try {
-                localStorage.setItem('pp_selectedBets', JSON.stringify(selectedBets));
-            } catch(e){}
+            try { localStorage.setItem('pp_selectedBets', JSON.stringify(selectedBets)); } catch(e){}
 
             updateBetSlipCount();
 
-            if (cardElement) {
-                const lessBtn = cardElement.querySelector('.button.less');
-                const moreBtn = cardElement.querySelector('.button.more');
-                if (lessBtn && moreBtn) {
-                    const sel = selectedBets.find(b => b.key === key && b.sport === sport);
-                    lessBtn.className = 'button less';
-                    moreBtn.className = 'button more';
-                    if (sel) {
-                        if (sel.choice === 'Less') lessBtn.className += ' selected selected-less';
-                        else moreBtn.className += ' selected selected-more';
-                    } else {
-                        const bt = (row['Bet Tag'] || '').toLowerCase();
-                        if (bt.includes('over') || bt.includes('more') || bt.includes('↑')) moreBtn.className += ' green-outline';
-                        if (bt.includes('under') || bt.includes('less') || bt.includes('↓')) lessBtn.className += ' red-outline';
-                    }
-                }
+            // Re-render current view to update button states
+            if (currentSport === 'all') {
+                renderAllView();
             } else {
-                if (currentSport === 'all') {
-                    renderAllView();
-                } else {
-                    renderContent();
-                }
-            }
-
-            const betSlipPopup = document.getElementById('betslipPopup');
-            if (betSlipPopup && betSlipPopup.style.display === 'block') {
-                renderBetSlipsTable();
+                renderContent();
             }
         }
 
         function updateBetSlipCount() {
             const btn = document.getElementById('betslipBtn');
-            if (btn) {
-                btn.innerHTML = `Bet Slips (${selectedBets.length})`;
-            }
+            if (btn) btn.innerHTML = `Bet Slips (${selectedBets.length})`;
         }
 
         function updateStandardBetsCount() {
-            let count = 0;
-            ['nba','wnba','mlb','soccer'].forEach(s => {
-                const store = dataStore[s];
-                if (store && store.allData) {
-                    count += store.allData.filter(r => (r['Odds Type'] || 'standard') === 'standard').length;
-                }
-            });
             const el = document.getElementById('standardBetsNumber');
-            if (el) el.textContent = count;
+            if (!el) return;
+
+            let count = 0;
+            ['nba', 'wnba', 'mlb', 'soccer'].forEach(sport => {
+                const data = dataStore[sport]?.allData || [];
+                count += data.filter(row => (row['Odds Type'] || 'standard').toLowerCase() === 'standard').length;
+            });
+
+            el.textContent = count;
         }
 
-        // ==================== RENDER ALL VIEW ====================
+        // ==================== ALL VIEW ====================
         function renderAllView() {
             contentDiv.innerHTML = '';
             contentDiv.className = '';
+            contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
             let allRows = [];
             ['nba', 'wnba', 'mlb', 'soccer'].forEach(s => {
@@ -2210,6 +2288,7 @@
                 });
             });
 
+            // Filter by selected Odds Type (Standard / Demon / Goblin)
             const selectedOddsType = (document.getElementById('oddsSelect')?.value || 'standard').toLowerCase();
             if (selectedOddsType !== 'all') {
                 allRows = allRows.filter(r => {
@@ -2218,6 +2297,7 @@
                 });
             }
 
+            // Search
             const term = (searchInput.value || '').toLowerCase().trim();
             if (term) {
                 allRows = allRows.filter(r =>
@@ -2226,146 +2306,121 @@
                 );
             }
 
+            // Stat type filter (from tabs)
             if (window.allStatTypesSelected && window.allStatTypesSelected.size > 0) {
                 allRows = allRows.filter(r => window.allStatTypesSelected.has((r['Stat Type'] || '').trim()));
             }
 
-            const showSelected = document.getElementById('selectedToggle')?.checked;
-            if (showSelected) {
+            // Selected only
+            if (selectedToggle.checked) {
                 const selectedKeys = new Set(selectedBets.map(b => b.key));
                 allRows = allRows.filter(r => selectedKeys.has(`${r['Player Name']}-${r['Stat Type']}`));
             }
 
-            allRows.sort((a, b) => parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0));
+            // Sort (default Edge desc)
+            allRows.sort((a, b) => {
+                const aEdge = parseFloat(a['Edge %'] || 0);
+                const bEdge = parseFloat(b['Edge %'] || 0);
+                return bEdge - aEdge;
+            });
 
-            currentFiltered = allRows;
+            currentFiltered = allRows; // for popup navigation on All tab
 
             if (allRows.length === 0) {
                 contentDiv.innerHTML = '<div class="loading">No props match your current filters.</div>';
                 return;
             }
 
-            const viewMode = document.getElementById('viewSelect')?.value || 'cards';
-
-            if (viewMode === 'cards') {
-                allRows.forEach((row, index) => {
-                    const card = createPlayerCard(row, index, row._sport);
-                    contentDiv.appendChild(card);
-                });
-            } else {
-                // Table view for All
+            // Render cards (or table if user switched)
+            const useTable = viewSelect.value === 'table';
+            if (useTable) {
+                // Simple table for All view
                 const table = document.createElement('table');
                 table.style.width = '100%';
                 table.style.borderCollapse = 'collapse';
-                table.style.fontSize = '12px';
+                table.style.fontSize = '13px';
 
                 const thead = document.createElement('thead');
                 const headerRow = document.createElement('tr');
-                const headers = ['Sport', 'Player', 'Stat', 'Edge', 'Line', 'Actions'];
-                headers.forEach(h => {
+                ['Player', 'Sport', 'Stat', 'Line', 'Edge', 'Actions'].forEach(label => {
                     const th = document.createElement('th');
-                    th.textContent = h;
-                    th.style.padding = '8px 6px';
+                    th.textContent = label;
+                    th.style.padding = '10px 8px';
                     th.style.background = '#222';
                     th.style.color = '#ccc';
                     th.style.borderBottom = '2px solid #333';
-                    th.style.position = 'sticky';
-                    th.style.top = '0';
                     headerRow.appendChild(th);
                 });
                 thead.appendChild(headerRow);
                 table.appendChild(thead);
 
                 const tbody = document.createElement('tbody');
-
                 allRows.forEach((row, index) => {
                     const tr = document.createElement('tr');
                     tr.style.borderBottom = '1px solid #333';
 
-                    const tdSport = document.createElement('td');
-                    tdSport.style.padding = '6px';
+                    const sport = row._sport || 'nba';
                     let sportBadge = '';
-                    if (row._sport === 'nba') sportBadge = '<span style="background:#7c3aed;color:white;padding:1px 5px;border-radius:4px;font-size:10px;">NBA</span>';
-                    else if (row._sport === 'wnba') sportBadge = '<span style="background:#f97316;color:white;padding:1px 5px;border-radius:4px;font-size:10px;">WNBA</span>';
-                    else if (row._sport === 'mlb') sportBadge = '<span style="background:#22c55e;color:white;padding:1px 5px;border-radius:4px;font-size:10px;">MLB</span>';
-                    else if (row._sport === 'soccer') sportBadge = '<span style="background:#10b981;color:white;padding:1px 5px;border-radius:4px;font-size:10px;">SOCCER</span>';
-                    tdSport.innerHTML = sportBadge;
-                    tr.appendChild(tdSport);
+                    if (sport === 'nba') sportBadge = '🏀 NBA';
+                    else if (sport === 'wnba') sportBadge = '🏀 WNBA';
+                    else if (sport === 'mlb') sportBadge = '⚾ MLB';
+                    else if (sport === 'soccer') sportBadge = '⚽ Soccer';
 
-                    const tdPlayer = document.createElement('td');
-                    tdPlayer.style.padding = '6px';
-                    tdPlayer.innerHTML = `<div style="font-weight:600;color:#00ffcc;">${row['Player Name']}</div><div style="font-size:10px;color:#888;">${row.Team || ''}</div>`;
-                    tdPlayer.onclick = () => showPlayerPopup(row, index, row._sport);
-                    tr.appendChild(tdPlayer);
-
-                    const tdStat = document.createElement('td');
-                    tdStat.style.padding = '6px';
-                    tdStat.textContent = row['Stat Type'] || '';
-                    tr.appendChild(tdStat);
-
-                    const tdEdge = document.createElement('td');
-                    tdEdge.style.padding = '6px';
-                    tdEdge.style.fontWeight = '700';
-                    tdEdge.style.color = '#00ffcc';
-                    let icon = '';
-                    const ot = (row['Odds Type'] || '').toLowerCase();
-                    if (ot === 'demon') icon = '👿 ';
-                    if (ot === 'goblin') icon = '👺 ';
-                    tdEdge.textContent = icon + (parseFloat(row['Edge %'] || 0).toFixed(1) + '%');
-                    tr.appendChild(tdEdge);
-
-                    const tdLine = document.createElement('td');
-                    tdLine.style.padding = '6px';
-                    tdLine.style.fontWeight = '600';
-                    tdLine.textContent = row['Line Score'] || row.Line || '-';
-                    tr.appendChild(tdLine);
-
-                    const tdActions = document.createElement('td');
-                    tdActions.style.padding = '6px';
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'buttons';
-                    actionsDiv.style.margin = '0';
-                    actionsDiv.style.background = 'transparent';
-
-                    const key = `${row['Player Name']}-${row['Stat Type']}`;
-                    const selectedBet = selectedBets.find(b => b.key === key && b.sport === row._sport);
-                    let lessClass = 'button less';
-                    let moreClass = 'button more';
-                    if (selectedBet) {
-                        if (selectedBet.choice === 'Less') lessClass += ' selected selected-less';
-                        else moreClass += ' selected selected-more';
-                    }
-
-                    actionsDiv.innerHTML = `
-                        <button class="${lessClass}" data-choice="Less" style="padding:4px 10px;font-size:11px;">↓ Less</button>
-                        <button class="${moreClass}" data-choice="More" style="padding:4px 10px;font-size:11px;">↑ More</button>
+                    tr.innerHTML = `
+                        <td style="padding:8px;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <img src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/28?text=?'}" style="width:28px;height:28px;border-radius:50%;border:1px solid #444;" alt="">
+                                <div>
+                                    <div style="font-weight:600;color:#00ffcc;">${row['Player Name']}</div>
+                                    <div style="font-size:10px;color:#888;">${row.Team || ''}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding:8px;font-size:12px;">${sportBadge}</td>
+                        <td style="padding:8px;">${row['Stat Type'] || ''}</td>
+                        <td style="padding:8px;font-weight:600;">${row['Line Score'] || row.Line || '-'}</td>
+                        <td style="padding:8px;font-weight:700;color:#00ffcc;">${parseFloat(row['Edge %'] || 0).toFixed(1)}%</td>
+                        <td style="padding:8px;">
+                            <div class="buttons" style="margin:0;background:transparent;">
+                                <button class="button less" style="padding:6px 12px;font-size:12px;">↓ Less</button>
+                                <button class="button more" style="padding:6px 12px;font-size:12px;">↑ More</button>
+                            </div>
+                        </td>
                     `;
 
-                    const lessBtn = actionsDiv.querySelector('.button.less');
-                    const moreBtn = actionsDiv.querySelector('.button.more');
+                    const lessBtn = tr.querySelector('.button.less');
+                    const moreBtn = tr.querySelector('.button.more');
 
                     lessBtn.onclick = (e) => {
                         e.stopImmediatePropagation();
-                        toggleBet(row, 'Less', row._sport);
+                        toggleBet(row, 'Less', sport);
                     };
                     moreBtn.onclick = (e) => {
                         e.stopImmediatePropagation();
-                        toggleBet(row, 'More', row._sport);
+                        toggleBet(row, 'More', sport);
                     };
 
-                    tdActions.appendChild(actionsDiv);
-                    tr.appendChild(tdActions);
+                    tr.onclick = (e) => {
+                        if (!e.target.closest('button')) {
+                            showPlayerPopup(row, index, sport);
+                        }
+                    };
 
                     tbody.appendChild(tr);
                 });
 
                 table.appendChild(tbody);
                 contentDiv.appendChild(table);
+            } else {
+                allRows.forEach((row, index) => {
+                    const card = createPlayerCard(row, index, row._sport || 'nba');
+                    contentDiv.appendChild(card);
+                });
             }
         }
 
         // ==================== PLAYER POPUP ====================
-        let popupTouchStartX = 0;
+        let currentPopupSport = '';
 
         function showPlayerPopup(row, index, sport) {
             const popup = document.getElementById('playerPopup');
@@ -2377,7 +2432,7 @@
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
-            // Mobile bottom sheet
+            // Make it a bottom sheet on mobile
             if (window.innerWidth <= 768) {
                 popup.classList.add('bottom-sheet');
                 setTimeout(() => popup.classList.add('show'), 10);
@@ -2385,16 +2440,17 @@
                 popup.classList.remove('bottom-sheet', 'show');
             }
 
-            const playerName = row['Player Name'] || '';
+            const playerName = row['Player Name'];
 
-            document.getElementById('popupName').innerHTML = `<span>${playerName}</span>`;
+            document.getElementById('popupName').innerHTML = playerName;
 
-            // Game context info (DVP, O/U, Spread)
+            // Add game context info (DVP, O/U, Spread) if available
             const gameTotal = row['Game Total'] || row['Total'] || '';
-            const gameOU = row['O/U'] || row['Over/Under'] || '';
+            const gameOU = row['O/U'] || row['Over/Under'] || row['ou'] || '';
             const pointSpread = row['Spread'] || row['Point Spread'] || '';
             const oppDvpRank = row['Opp DVP Rank'] || row['DVP Rank'] || row['Opponent DVP'] || '';
 
+            // Clear previous gameInfo if any
             const existingGameInfo = document.getElementById('popupName').querySelector('.game-context-info');
             if (existingGameInfo) existingGameInfo.remove();
 
@@ -2425,7 +2481,7 @@
                         let ouClass = '';
                         if (ou <= 156) ouClass = 'ou-red';
                         else if (ou >= 170) ouClass = 'ou-green';
-                        else ouClass = 'ou-yellow';
+                        else ouClass = 'ou-yellow'; // middle range (157-169)
                         html += `<span>Game O/U: <strong class="${ouClass}">${gameOU}</strong></span>`;
                     } else {
                         html += `<span>Game O/U: <strong style="color:#fff;">${gameOU}</strong></span>`;
@@ -2455,10 +2511,10 @@
 
             document.getElementById('popupHeadshot').src = row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/64?text=?';
             document.getElementById('popupTeamPos').innerHTML = `${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}`;
-            document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
+            document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : 'No Game');
             document.getElementById('popupScheduledAt').innerHTML = row['Scheduled At'] ? new Date(row['Scheduled At']).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '';
 
-            // L5 stats
+            // Initial L5 (will be '-' until game logs load in background)
             let l5Avg = '-';
             let l5HitPct = '-';
             const logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
@@ -2484,6 +2540,7 @@
                 }
             }
 
+            // Stats boxes (now with real L5 data)
             const statsBoxes = document.getElementById('statsBoxes');
             statsBoxes.innerHTML = `
                 <div class="stat-box"><div class="stat-label">Edge</div><div class="stat-value" style="color:#00ffcc">${parseFloat(row['Edge %'] || 0).toFixed(1)}%</div></div>
@@ -2493,8 +2550,10 @@
                 <div class="stat-box"><div class="stat-label">OPs</div><div class="stat-value">${row['MIN Avg'] || row['Opportunities'] || row['opp'] || '-'}</div></div>
             `;
 
+            // ========== INSTANT POPUP: Load game logs in background (non-blocking) ==========
             ensureGameLogsLoaded(sport).then(() => {
                 if (popup.style.display === 'block' && currentPopupSport === sport) {
+                    // Recompute L5 stats now that logs are loaded
                     let newL5Avg = '-';
                     let newL5HitPct = '-';
                     const freshLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
@@ -2514,6 +2573,7 @@
                             newL5HitPct = ((hits / last5Logs.length) * 100).toFixed(0);
                         }
                     }
+                    // Update the L5 stat boxes
                     const sb = document.getElementById('statsBoxes');
                     if (sb) {
                         sb.innerHTML = `
@@ -2524,6 +2584,7 @@
                             <div class="stat-box"><div class="stat-label">OPs</div><div class="stat-value">${row['MIN Avg'] || row['Opportunities'] || row['opp'] || '-'}</div></div>
                         `;
                     }
+                    // If user is on Game Log or Splits tab, refresh it with fresh data
                     const activeTabEl = document.querySelector('#popupTabs .tab.active');
                     if (activeTabEl) {
                         const tabName = activeTabEl.textContent.trim();
@@ -2534,6 +2595,7 @@
                 }
             }).catch(() => {});
 
+            // Tabs
             const popupTabs = document.getElementById('popupTabs');
             popupTabs.innerHTML = '';
             const tabNames = ['Overview', 'Game Log', 'Splits', 'Other Bets', 'Matchup', 'More Books'];
@@ -2549,14 +2611,16 @@
                 popupTabs.appendChild(t);
             });
 
+            // Initial content
             renderPopupContent('Overview', row, sport);
 
+            // Nav
             document.getElementById('prevPlayer').onclick = () => navigatePopup(-1);
             document.getElementById('nextPlayer').onclick = () => navigatePopup(1);
-
+            // Close button - use addEventListener for reliability
             const closeBtn = document.getElementById('closePlayerPopup');
             if (closeBtn) {
-                closeBtn.onclick = null;
+                closeBtn.onclick = null; // clear any previous
                 closeBtn.onclick = () => {
                     popup.classList.remove('bottom-sheet', 'show');
                     popup.style.display = 'none';
@@ -2565,11 +2629,16 @@
                 };
             }
 
-            // Mobile gestures
+            // === Refined Mobile Gestures (Easy + Professional) ===
+            // Double-tap on header or main content → Add recommended bet
+            // Swipe down → Close bottom sheet
+            // Tap backdrop → Close popup
+            // Horizontal swipe → Change player
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
                 let lastTap = 0;
                 let touchStartY = 0;
 
+                // Double-tap detection (only on header + main content, not deep scroll areas)
                 const doubleTapAreas = [popup.querySelector('.header'), popup.querySelector('#popupContent')].filter(Boolean);
 
                 doubleTapAreas.forEach(area => {
@@ -2595,9 +2664,9 @@
                     }, { passive: false });
                 });
 
+                // Swipe down to close (on the whole popup)
                 popup.addEventListener('touchstart', function(e) {
                     touchStartY = e.changedTouches[0].screenY;
-                    popupTouchStartX = e.changedTouches[0].screenX;
                 }, { passive: true });
 
                 popup.addEventListener('touchend', function(e) {
@@ -2614,37 +2683,48 @@
                         return;
                     }
 
+                    // === Premium Horizontal Swipe (Page-turn feel) ===
                     const touchEndX = e.changedTouches[0].screenX;
                     const diffX = popupTouchStartX - touchEndX;
 
-                    if (Math.abs(diffX) > 70 && Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY)) {
                         const popupContent = popup.querySelector('#popupContent') || popup;
 
                         if (diffX > 0) {
+                            // Swipe left → Next player (slide in from right)
                             if (currentRowIndex < currentFiltered.length - 1) {
                                 popupContent.style.animation = 'none';
-                                void popupContent.offsetWidth;
+                                void popupContent.offsetWidth; // trigger reflow
                                 popupContent.style.animation = 'slideInFromRight 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    showPlayerPopup(currentFiltered[currentRowIndex + 1], currentRowIndex + 1, currentPopupSport);
+                                    navigatePopup(1);
                                 }, 80);
                             }
                         } else {
+                            // Swipe right → Previous player (slide in from left)
                             if (currentRowIndex > 0) {
                                 popupContent.style.animation = 'none';
                                 void popupContent.offsetWidth;
                                 popupContent.style.animation = 'slideInFromLeft 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    showPlayerPopup(currentFiltered[currentRowIndex - 1], currentRowIndex - 1, currentPopupSport);
+                                    navigatePopup(-1);
                                 }, 80);
                             }
                         }
                     }
                 }, { passive: true });
-            }
 
+            }
+            
+            // Store touch start X globally for the popup (for horizontal swipe)
+            let popupTouchStartX = 0;
+            popup.addEventListener('touchstart', function(e) {
+                popupTouchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+
+            // Tap backdrop to close
             const overlayEl = document.getElementById('overlay');
             if (overlayEl) {
                 overlayEl.onclick = () => {
@@ -2655,6 +2735,35 @@
                         if (currentChart) { currentChart.destroy(); currentChart = null; }
                     }, 280);
                 };
+            }
+
+            // Toast notification for bet confirmation
+            function showBetToast(message) {
+                const existing = popup.querySelector('.bet-toast');
+                if (existing) existing.remove();
+
+                const toast = document.createElement('div');
+                toast.className = 'bet-toast';
+                toast.style.cssText = `
+                    position: absolute; bottom: 75px; left: 50%; transform: translateX(-50%);
+                    background: #22c55e; color: #000; padding: 8px 18px; border-radius: 9999px;
+                    font-size: 13px; font-weight: 600; white-space: nowrap;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.35); z-index: 200; opacity: 0;
+                    transition: all 0.25s ease;
+                `;
+                toast.textContent = message;
+                popup.appendChild(toast);
+
+                requestAnimationFrame(() => { toast.style.opacity = '1'; });
+
+                setTimeout(() => {
+                    if (toast && toast.parentNode) {
+                        toast.style.opacity = '0';
+                        setTimeout(() => {
+                            if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+                        }, 200);
+                    }
+                }, 1600);
             }
         }
 
@@ -2675,7 +2784,7 @@
                 const cell = avgRow.cells[colIndex];
                 if (!cell) return;
 
-                if (['MATCH UP', 'GAME DATE', 'W/L', 'FG', '3PM/A', 'FT', 'Summary', 'HR', 'K'].includes(header)) {
+                if (['MATCH UP', 'GAME DATE', 'W/L', 'FG', '3PM/A', 'FT', 'Summary'].includes(header)) {
                     if (header === 'MATCH UP') cell.textContent = 'Filtered Avg';
                     else cell.textContent = '-';
                     return;
@@ -2699,15 +2808,27 @@
         function navigatePopup(delta) {
             if (!currentFiltered || currentFiltered.length === 0) return;
 
-            let newIndex = currentRowIndex + delta;
+            // Re-find current position by key (player + stat) to handle any list reordering or filtering between navigations
+            const currentItem = currentFiltered[currentRowIndex] || {};
+            const currentKey = `${currentItem['Player Name'] || ''}-${currentItem['Stat Type'] || ''}`;
+            let currentPos = currentRowIndex;
+
+            for (let i = 0; i < currentFiltered.length; i++) {
+                const k = `${currentFiltered[i]['Player Name'] || ''}-${currentFiltered[i]['Stat Type'] || ''}`;
+                if (k === currentKey) {
+                    currentPos = i;
+                    break;
+                }
+            }
+
+            let newIndex = currentPos + delta;
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
 
-            // Ensure we don't skip: directly use the calculated index
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
-        // ==================== MORE BOOKS TAB ====================
+        // ==================== MORE BOOKS TAB (Stable) ====================
         async function renderMoreBooksTab(row, sport, contentDiv) {
             if (sport !== 'mlb') {
                 contentDiv.innerHTML = `
@@ -2731,7 +2852,7 @@
             try {
                 if (!dataStore.mlb.comboData) {
                     const res = await fetch('https://raw.githubusercontent.com/925Sports/mlb-prop-optimizer/refs/heads/main/data/combo_data.csv');
-                    if (!res.ok) throw new Error('Could not fetch comparison data');
+                    if (!res.ok) throw new Error('Could not fetch combo_data.csv');
                     const text = await res.text();
                     dataStore.mlb.comboData = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
                 }
@@ -2800,7 +2921,7 @@
 
                 if (matches.length === 0) {
                     contentDiv.innerHTML = `
-                        <div style="padding:20px; color:#ccc; font-size:13px; text-align:center;">
+                        <div style="padding:20px; color:#ccc; font-size:13px;">
                             <strong>No other Sportsbooks have data for this bet, or betting data for this bet is currently not being pulled in.</strong>
                         </div>`;
                     return;
@@ -2854,7 +2975,6 @@
 
                 sortedBooks.forEach(book => {
                     const p = byBook[book];
-                    const point = p.point || p.Point || '-';
                     const over = p['Over Price'] || '-';
                     const under = p['Under Price'] || '-';
                     const overPct = p['Over %'] || p['Average Over %'] || '-';
@@ -2866,7 +2986,7 @@
 
                     html += `<tr style="border-bottom:1px solid #333;">
                         <td style="padding:5px 4px; font-weight:600; text-align:center;">${book}</td>
-                        <td style="padding:5px 4px; text-align:center; font-family:monospace; font-weight:600;">${point}</td>
+                        <td style="padding:5px 4px; text-align:center; font-family:monospace;">${p.point || p.Point || p['point'] || '-'}</td>
                         <td style="padding:5px 4px; text-align:center; font-family:monospace;">${over}</td>
                         <td style="padding:5px 4px; text-align:center; font-family:monospace;">${under}</td>
                         <td style="padding:5px 4px; text-align:center;">${overPct}</td>
@@ -2881,10 +3001,7 @@
                 contentDiv.innerHTML = html;
 
             } catch (err) {
-                contentDiv.innerHTML = `
-                    <div style="padding:20px; color:#ccc; font-size:13px; text-align:center;">
-                        <strong>No other Sportsbooks have data for this bet, or betting data for this bet is currently not being pulled in.</strong>
-                    </div>`;
+                contentDiv.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Error loading comparison data.</div>`;
             }
         }
 
@@ -2972,6 +3089,7 @@
                     { name: 'UD Line', value: parseFloat(row['Underdog Line'] || 0) }
                 ].filter(p => p.value > 0);
 
+                // Sort from highest to lowest (as requested)
                 projections.sort((a, b) => b.value - a.value);
 
                 const labels = projections.map(p => p.name);
@@ -2979,6 +3097,7 @@
 
                 const colors = projections.map(p => {
                     const name = p.name.toLowerCase();
+                    // UD Line should follow the same green/red rule as other projections (no special red)
                     if (name.includes('line')) {
                         return 'rgba(156, 163, 175, 0.85)';
                     }
@@ -3042,6 +3161,7 @@
                     if (selected.choice === 'Less') lessC += ' selected selected-less';
                     else moreC += ' selected selected-more';
                 }
+                // Add divider like player cards (red/green dash in middle)
                 const btLower = (row['Bet Tag'] || '').toLowerCase();
                 const dividerClass = btLower.includes('more') || btLower.includes('over') || btLower.includes('↑') ? 'more' : 
                                      (btLower.includes('less') || btLower.includes('under') || btLower.includes('↓') ? 'less' : '');
@@ -3052,6 +3172,7 @@
                 `;
                 content.appendChild(betDiv);
 
+                // Small visual hint for double-tap on mobile
                 if (window.innerWidth <= 768) {
                     const hint = document.createElement('div');
                     hint.style.cssText = 'text-align:center; font-size:11px; color:#888; margin-top:6px;';
@@ -3077,15 +3198,7 @@
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
                     if (sport === 'mlb') {
-                        // FIXED: Split HR/K into separate columns
                         html += `<th>Date</th><th>Opp</th><th>IP/AB</th><th>ER/H</th><th>R</th><th>RBI</th><th>HR</th><th>K</th><th>BB</th><th>FP</th><th>Summary</th>`;
-                    } else if (sport === 'nba') {
-                        const headers = ['MATCH UP','GAME DATE','W/L','MIN','PTS','FG','FG%','3PM/A','3P%','FT','FT%','OREB','DREB','REB','AST','STL','BLK','TOV','PF','+/-','FP'];
-                        html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
-                        html += `<input type="text" id="gameLogSearch" placeholder="Search by Match Up..." style="width:100%;margin-bottom:6px;padding:6px 10px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;">`;
-                        html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:10.5px;"><thead><tr>`;
-                        headers.forEach(h => html += `<th style="padding:3px 2px;cursor:pointer;" data-column="${h}">${h}</th>`);
-                        html += `</tr></thead><tbody>`;
                     } else {
                         html += `<th>Date</th><th>Opp</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>FP</th>`;
                     }
@@ -3094,6 +3207,7 @@
                     logs.slice(0, 30).forEach(log => {
                         const date = log.gameDate || log['GAME DATE'] || log.date || '';
                         
+                        // Improved Opp detection matching MLB code
                         let opp = '';
                         if (sport === 'mlb') {
                             const homeAbbr = log.home_team_abbreviation || '';
@@ -3116,9 +3230,8 @@
                             let col2 = isHitter ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
                             let col3 = isHitter ? (log.runs || log.R || 0) : '-';
                             let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
-                            // FIXED: Separate HR and K columns
                             let hrVal = isHitter ? (log.homeRuns || log.HR || 0) : '-';
-                            let kVal = isHitter ? '-' : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                            let kVal = !isHitter ? (log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || 0) : '-';
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
                             let summary = log.gameLogSummary || log.Summary || log.note || '';
 
@@ -3136,34 +3249,56 @@
                                 <td style="font-size:10px;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${summary}</td>
                             </tr>`;
                         } else if (sport === 'nba') {
-                            const fg = `${log.FGM||0}/${log.FGA||0}`;
-                            const three = `${log['3PM']||log.threePointersMade||0}/${log['3PA']||0}`;
-                            const ft = `${log.FTM||0}/${log.FTA||0}`;
-                            const pm = log['Plus/Minus'] || log.plusMinus || 0;
-                            const matchUp = log['MATCH UP'] || log.MATCH_UP || log.opponent || log.Opp || log['Opp'] || '';
-                            html += `<tr>
-                                <td data-label="MATCH UP">${matchUp}</td>
-                                <td data-label="GAME DATE">${log['GAME DATE']||log.gameDate||''}</td>
-                                <td data-label="W/L">${log['W/L']||log.WL||''}</td>
-                                <td data-label="MIN">${log.MIN||log.min||'-'}</td>
-                                <td data-label="PTS">${log.PTS||log.points||0}</td>
-                                <td data-label="FG">${fg}</td>
-                                <td data-label="FG%">${log['FG%']||log.FG_PCT||'-'}</td>
-                                <td data-label="3PM/A">${three}</td>
-                                <td data-label="3P%">${log['3P%']||log['3P_PCT']||'-'}</td>
-                                <td data-label="FT">${ft}</td>
-                                <td data-label="FT%">${log['FT%']||log.FT_PCT||'-'}</td>
-                                <td data-label="OREB">${log.OREB||log.oreb||0}</td>
-                                <td data-label="DREB">${log.DREB||log.dreb||0}</td>
-                                <td data-label="REB">${log.REB||log.rebounds||0}</td>
-                                <td data-label="AST">${log.AST||log.assists||0}</td>
-                                <td data-label="STL">${log.STL||log.steals||0}</td>
-                                <td data-label="BLK">${log.BLK||log.blocks||0}</td>
-                                <td data-label="TOV">${log.TOV||log.turnovers||0}</td>
-                                <td data-label="PF">${log.PF||log.fouls||0}</td>
-                                <td data-label="+/-">${pm}</td>
-                                <td data-label="FP" style="color:#00ffcc;font-weight:700">${calculateFantasyScore(log,'nba').toFixed(1)}</td>
-                            </tr>`;
+                            // Rich NBA Game Log with full columns + proper Opp from MATCH UP
+                            const headers = ['MATCH UP','GAME DATE','W/L','MIN','PTS','FG','FG%','3PM/A','3P%','FT','FT%','OREB','DREB','REB','AST','STL','BLK','TOV','PF','+/-','FP'];
+                            html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
+                            html += `<input type="text" id="gameLogSearch" placeholder="Search by Match Up..." style="width:100%;margin-bottom:6px;padding:6px 10px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;">`;
+                            html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:10.5px;"><thead><tr>`;
+                            headers.forEach(h => html += `<th style="padding:3px 2px;cursor:pointer;" data-column="${h}">${h}</th>`);
+                            html += `</tr></thead><tbody>`;
+
+                            logs.forEach(log => {
+                                const fg = `${log.FGM||0}/${log.FGA||0}`;
+                                const three = `${log['3PM']||log.threePointersMade||0}/${log['3PA']||0}`;
+                                const ft = `${log.FTM||0}/${log.FTA||0}`;
+                                const pm = log['Plus/Minus'] || log.plusMinus || 0;
+                                const matchUp = log['MATCH UP'] || log.MATCH_UP || log.opponent || log.Opp || log['Opp'] || '';
+                                html += `<tr>
+                                    <td data-label="MATCH UP">${matchUp}</td>
+                                    <td data-label="GAME DATE">${log['GAME DATE']||log.gameDate||''}</td>
+                                    <td data-label="W/L">${log['W/L']||log.WL||''}</td>
+                                    <td data-label="MIN">${log.MIN||log.min||'-'}</td>
+                                    <td data-label="PTS">${log.PTS||log.points||0}</td>
+                                    <td data-label="FG">${fg}</td>
+                                    <td data-label="FG%">${log['FG%']||log.FG_PCT||'-'}</td>
+                                    <td data-label="3PM/A">${three}</td>
+                                    <td data-label="3P%">${log['3P%']||log['3P_PCT']||'-'}</td>
+                                    <td data-label="FT">${ft}</td>
+                                    <td data-label="FT%">${log['FT%']||log.FT_PCT||'-'}</td>
+                                    <td data-label="OREB">${log.OREB||log.oreb||0}</td>
+                                    <td data-label="DREB">${log.DREB||log.dreb||0}</td>
+                                    <td data-label="REB">${log.REB||log.rebounds||0}</td>
+                                    <td data-label="AST">${log.AST||log.assists||0}</td>
+                                    <td data-label="STL">${log.STL||log.steals||0}</td>
+                                    <td data-label="BLK">${log.BLK||log.blocks||0}</td>
+                                    <td data-label="TOV">${log.TOV||log.turnovers||0}</td>
+                                    <td data-label="PF">${log.PF||log.fouls||0}</td>
+                                    <td data-label="+/-">${pm}</td>
+                                    <td data-label="FP" style="color:#00ffcc;font-weight:700">${calculateFantasyScore(log,'nba').toFixed(1)}</td>
+                                </tr>`;
+                            });
+
+                            // Averages row
+                            html += `<tr style="font-weight:700;background:#222;"><td data-label="MATCH UP">Averages</td>`;
+                            headers.slice(1).forEach(h => {
+                                if (['W/L','FG','3PM/A','FT'].includes(h)) html += `<td data-label="${h}">-</td>`;
+                                else {
+                                    let sum=0, cnt=0;
+                                    logs.forEach(l => { const v = parseFloat(l[h] || l[h.replace('/','_')] || 0); if(!isNaN(v)){sum+=v;cnt++;} });
+                                    html += `<td data-label="${h}">${cnt>0 ? (sum/cnt).toFixed(1) : '-'}</td>`;
+                                }
+                            });
+                            html += `</tr></tbody></table></div>`;
                         } else {
                             html += `<tr><td>${date}</td><td>${opp}</td><td>${log.PTS || log.points || 0}</td><td>${log.REB || log.rebounds || 0}</td><td>${log.AST || log.assists || 0}</td><td>${log['3PM'] || log.threePointersMade || 0}</td><td style="color:#00ffcc;font-weight:700">${fp}</td></tr>`;
                         }
@@ -3198,6 +3333,7 @@
                     return;
                 }
                 if (sport === 'nba') {
+                    // ========== FULL RICH NBA SPLITS CHART (matching your original NBA tool + desired image) ==========
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     playerLogs.sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || b.date || 0) - new Date(a['GAME DATE'] || a.gameDate || a.date || 0));
                     const recentLogs = playerLogs.slice(0, 20);
@@ -3222,26 +3358,30 @@
                         return parseFloat(log[statType.toUpperCase()] || log[statType] || 0) || 0;
                     };
 
+                    // Last 5 games for chart
                     const last5 = recentLogs.slice(0, 5).map(log => {
                         const rawDate = log['GAME DATE'] || log.gameDate || log.date || '';
                         let formattedDate = '';
                         if (rawDate) {
+                            // Handle common formats: "6/8/2026", "2026-06-08", "Jun 8, 2026"
                             const parts = rawDate.split(/[-/,\s]+/);
                             if (parts.length >= 2) {
                                 let month = parts[0];
                                 let day = parts[1];
+                                // If first part is year (2026), shift
                                 if (month.length === 4) {
                                     month = parts[1];
                                     day = parts[2];
                                 }
                                 formattedDate = `${parseInt(month)}/${parseInt(day)}`;
                             } else {
-                                formattedDate = rawDate.slice(5);
+                                formattedDate = rawDate.slice(5); // fallback
                             }
                         }
                         return { date: formattedDate || 'N/A', value: getStatValueForNBA(log, row['Stat Type'] || '') };
                     });
 
+                    // Categories matching desired image (vs Opp, L5/L10/L20, Away, Proj Min)
                     const categories = [];
                     const currentOpp = (row.Opp || row['Opp'] || '').toUpperCase();
                     const oppLogs = recentLogs.filter(l => (l['MATCH UP'] || l.opponent || '').toUpperCase().includes(currentOpp));
@@ -3252,6 +3392,7 @@
                         categories.push({ label: 'vs ' + (row.Opp || 'Opp'), average: oppAvg, hitRate: Math.round((hits / oppLogs.length) * 100) });
                     }
 
+                    // L5, L10, L20
                     [5,10,20].forEach(n => {
                         const slice = recentLogs.slice(0, n);
                         if (slice.length > 0) {
@@ -3261,6 +3402,7 @@
                         }
                     });
 
+                    // Away / Home proxy
                     const homeAwayLogs = recentLogs.filter(l => (l['MATCH UP'] || '').includes('@'));
                     if (homeAwayLogs.length > 0) {
                         const avg = homeAwayLogs.reduce((a,l) => a + getStatValueForNBA(l, row['Stat Type']||''), 0) / homeAwayLogs.length;
@@ -3268,6 +3410,7 @@
                         categories.push({ label: 'Away', average: avg, hitRate: Math.round((hits / homeAwayLogs.length) * 100) });
                     }
 
+                    // Calculate hit rates for categories
                     categories.forEach(cat => {
                         let hits = 0;
                         const logsToCheck = cat.label === 'L5' ? recentLogs.slice(0,5) : (cat.label === 'L10' ? recentLogs.slice(0,10) : recentLogs.slice(0,20));
@@ -3284,7 +3427,7 @@
 
                     const goodColor = 'rgba(34, 197, 94, 0.85)';
                     const badColor = 'rgba(239, 68, 68, 0.85)';
-                    const neutralColor = 'rgba(156, 163, 175, 0.85)';
+                    const neutralColor = 'rgba(156, 163, 175, 0.85)'; // Grey for tie/exact match
                     const colors = last5.map(g => {
                         if (g.value > line) return goodColor;
                         if (g.value < line) return badColor;
@@ -3364,20 +3507,11 @@
                     }, 80);
 
                 } else if (sport === 'mlb') {
+                    // ========== EXACT MLB SPLITS LOGIC (copied and adapted from MLB code) ==========
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     
-                    // Improved pitcher/hitter classification for Splits (fixes Pitcher Strikeouts, ER, IP, etc.)
-                    const statLower = (row['Stat Type'] || '').toLowerCase();
-                    const posUpper = (row.Position || row.Pos || '').toUpperCase();
-                    const isPitcherProp = posUpper.includes('P') || 
-                        statLower.includes('pitcher') || 
-                        statLower.includes('ip') || 
-                        statLower.includes('earned') || 
-                        statLower.includes('strikeout') || 
-                        statLower.includes(' k') || 
-                        statLower.includes('so');
-                    const isHitter = !isPitcherProp;
-
+                    // MLB hitter/pitcher filter for accurate splits
+                    const isHitter = !(row.Position || row.Pos || '').toUpperCase().includes('P') && !row['Stat Type'].toLowerCase().includes('pitcher');
                     if (isHitter) {
                         playerLogs = playerLogs.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
                     } else {
@@ -3473,6 +3607,7 @@
                     }, 150);
 
                 } else {
+                    // NBA / WNBA - keep the table-based splits (already improved)
                     const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
@@ -3570,9 +3705,15 @@
         }
 
         function getHotColdStatus(playerName, sport) {
+            // Simple placeholder - can be enhanced with real streak logic per sport
             return 'Neutral';
         }
 
+        /**
+         * Safely extracts the Underdog line from a row.
+         * Returns null if missing, empty, "0", or invalid.
+         * This is more defensive, especially for MLB data quality issues.
+         */
         function getUnderdogLine(row) {
             const possibleKeys = [
                 'Underdog Line', 'UnderdogLine', 'UD Line', 'ud_line', 'Underdog_Line'
@@ -3593,10 +3734,15 @@
 
             const num = parseFloat(rawValue);
 
+            // Treat 0 (or very close to 0) as "no Underdog line"
+            // This catches common data issues in MLB feeds where missing lines are stored as 0
             if (isNaN(num) || Math.abs(num) < 0.01) {
                 return null;
             }
 
+            // Special rule for Fantasy Score props (MLB, NBA, etc.):
+            // Underdog does not offer Fantasy Score lines (or data feed puts placeholder ~0.3).
+            // If UD line for a Fantasy Score prop is 0.3 or less, treat it as "no UD line".
             const statTypeLower = (row['Stat Type'] || '').toLowerCase();
             if (statTypeLower.includes('fantasy score') && num <= 0.3) {
                 return null;
@@ -3679,6 +3825,7 @@
         }
 
         function showAdvancedFilterPopup() {
+            // Button is hidden on All tab, but keep guard for safety (no ugly alert)
             if (currentSport === 'all') { 
                 return; 
             }
@@ -3696,6 +3843,7 @@
                 btList.appendChild(div);
             });
 
+            // Attach handlers right after populating the list (more reliable)
             const selectAllBetTagsBtn = document.getElementById('selectAllBetTags');
             const deselectAllBetTagsBtn = document.getElementById('deselectAllBetTags');
             if (selectAllBetTagsBtn) {
@@ -3730,8 +3878,10 @@
             }
 
             const hcList = document.getElementById('hotColdList');
+            // Hide Hot/Cold section entirely for soccer (no meaningful data)
             if (currentSport === 'soccer') {
                 hcList.style.display = 'none';
+                // Also hide the preceding h3 + buttons for Hot/Cold
                 const hotColdHeader = hcList.parentNode.querySelector('h3:last-of-type');
                 if (hotColdHeader && hotColdHeader.textContent.includes('Hot')) hotColdHeader.style.display = 'none';
                 const selectAllHotCold = document.getElementById('selectAllHotCold');
@@ -3754,7 +3904,7 @@
             };
         }
 
-        // ==================== BET SLIP (UPDATED FOR SPORT/GAME FILTER + NO HARD LIMIT) ====================
+        // ==================== BET SLIP ====================
         function showBetSlipPopup() {
             const popup = document.getElementById('betslipPopup');
             const overlay = document.getElementById('overlay');
@@ -3777,12 +3927,8 @@
             const betCount = bets.length;
             if (betCount < 2) return allCombinations;
 
-            // Use up to 10 bets (top edge ones if more selected)
-            const workingBets = betCount > 10 ? [...bets].sort((a,b) => (b.edge || 0) - (a.edge || 0)).slice(0, 10) : bets;
-            const workingCount = workingBets.length;
-
-            for (let pickcount = 2; pickcount <= Math.min(6, workingCount); pickcount++) {
-                const combos = (predefinedCombinations[pickcount] || []).filter(combo => combo.every(id => id <= workingCount)).map(combo => combo.map(id => id - 1));
+            for (let pickcount = 2; pickcount <= Math.min(6, betCount); pickcount++) {
+                const combos = (predefinedCombinations[pickcount] || []).filter(combo => combo.every(id => id <= betCount)).map(combo => combo.map(id => id - 1));
                 combos.forEach(combo => {
                     let valid = true;
                     let players = new Set();
@@ -3792,7 +3938,7 @@
                     let projectionEntries = [];
                     let games = new Set();
                     for (let idx of combo) {
-                        const bet = workingBets[idx];
+                        const bet = bets[idx];
                         if (!bet) { valid = false; break; }
                         const player = bet.player || 'Unknown';
                         const prob = parseFloat(bet.prob) || 0.5;
@@ -3845,31 +3991,30 @@
                 return;
             }
 
-            // NEW: Filter bets based on current sport tab and selected games (if on a specific sport)
-            let filteredBets = [...selectedBets];
-
-            if (currentSport !== 'all') {
-                filteredBets = filteredBets.filter(b => b.sport === currentSport);
+            // Scope bets for current context (MLB tab + optional game filter)
+            let betsToUse = selectedBets;
+            if (currentSport !== 'all' && currentSport) {
+                betsToUse = selectedBets.filter(b => b.sport === currentSport);
+            }
+            const store = (currentSport && currentSport !== 'all') ? dataStore[currentSport] : null;
+            if (store && store.selectedGames && store.selectedGames.size > 0 && store.selectedGames.size < (store.uniqueGames || []).length) {
+                betsToUse = betsToUse.filter(b => store.selectedGames.has(b.game || ''));
             }
 
-            // If on a specific sport and games are filtered (not all selected), only include bets from those games
-            if (currentSport !== 'all') {
-                const store = dataStore[currentSport];
-                if (store && store.selectedGames && store.uniqueGames && store.selectedGames.size < store.uniqueGames.length) {
-                    filteredBets = filteredBets.filter(b => {
-                        if (!b.game) return true; // include if no game info
-                        return store.selectedGames.has(b.game);
-                    });
-                }
-            }
-
-            if (filteredBets.length < 2) {
-                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Not enough bets for this sport/game filter. Select more bets matching your current filters.</td></tr>`;
-                document.getElementById('betSlipCount').textContent = `(${filteredBets.length} legs)`;
+            if (betsToUse.length < 2) {
+                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Not enough bets in current filter (need at least 2). Adjust filters or add more bets.</td></tr>`;
                 return;
             }
 
-            const combinations = generateCombinations(filteredBets);
+            // Use top 10 for combinations to keep performance good (predefined combos support up to 10)
+            let combosSource = betsToUse;
+            let limitNote = '';
+            if (betsToUse.length > 10) {
+                combosSource = betsToUse.slice(0, 10);
+                limitNote = `<div style="font-size:11px;color:#f59e0b;margin-bottom:6px;">Showing combinations from top 10 of ${betsToUse.length} selected bets.</div>`;
+            }
+
+            const combinations = generateCombinations(combosSource);
             let outputData = [];
             for (let pickcount = 2; pickcount <= 6; pickcount++) {
                 outputData.push(...(combinations[pickcount] || []));
@@ -3959,7 +4104,8 @@
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('betSlipCount').textContent = `(${filteredBets.length} legs • ${outputData.length} combos)`;
+            const scopedCount = (typeof betsToUse !== 'undefined' && betsToUse.length) ? betsToUse.length : selectedBets.length;
+            document.getElementById('betSlipCount').textContent = `(${scopedCount} legs • ${outputData.length} combos)${limitNote ? ' • top 10 used' : ''}`;
         }
 
         function removeBet(index) {
@@ -4019,11 +4165,13 @@
                             style="background:#333;color:#fff;border:none;padding:4px 14px;border-radius:9999px;font-size:13px;">Close</button>
                 </div>
 
+                <!-- Tabs -->
                 <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid #333; padding-bottom:8px;">
                     <div id="tab-howto" class="tab active" style="padding:6px 16px; background:#22c55e; color:#000; border-radius:9999px; font-weight:600; cursor:pointer;">How to Use</div>
                     <div id="tab-edge" class="tab" style="padding:6px 16px; background:#333; color:#fff; border-radius:9999px; font-weight:600; cursor:pointer;">Understanding Edge %</div>
                 </div>
 
+                <!-- Content: How to Use -->
                 <div id="content-howto">
                     <ul style="line-height:1.65; font-size:14px; padding-left:20px;">
                         <li>Switch between <strong>NBA • WNBA • MLB • All</strong> using the top tabs.</li>
@@ -4049,6 +4197,7 @@
                     </p>
                 </div>
 
+                <!-- Content: Understanding Edge % -->
                 <div id="content-edge" style="display:none; font-size:14px; line-height:1.65;">
                     <p>The <strong>Edge %</strong> displayed in this tool shows your estimated advantage on a prop bet.</p>
                     <p>It is calculated by comparing the PrizePicks line to sharp, no-vig market probabilities. The higher the Edge %, the more value the bet is expected to hold over time.</p>
@@ -4070,6 +4219,7 @@
             document.body.appendChild(popup);
             document.getElementById('overlay').style.display = 'block';
 
+            // Tab switching logic
             const tabHowto = popup.querySelector('#tab-howto');
             const tabEdge = popup.querySelector('#tab-edge');
             const contentHowto = popup.querySelector('#content-howto');
@@ -4116,36 +4266,32 @@
                 document.querySelectorAll('.popup, #playerPopup').forEach(p => p.style.display = 'none');
                 document.getElementById('overlay').style.display = 'none';
             };
-
-            // Improved pull-to-refresh handling (only allow at very top, better scroll behavior)
-            let lastTouchY = 0;
-            document.addEventListener('touchstart', function(e) {
-                if (e.touches.length === 1) {
-                    lastTouchY = e.touches[0].clientY;
-                }
-            }, { passive: true });
-
-            document.addEventListener('touchmove', function(e) {
-                if (e.touches.length !== 1) return;
-
-                const currentY = e.touches[0].clientY;
-                const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-                const isPullingDown = currentY > lastTouchY;
-
-                // Only prevent default (to stop refresh) if we are NOT at the very top
-                // This allows normal scrolling everywhere and lets native refresh work only at absolute top
-                if (isPullingDown && scrollTop > 5) {
-                    // Do nothing - let the scroll happen naturally
-                    // We do NOT call preventDefault here to avoid breaking scroll
-                }
-                // When at top (scrollTop <=5) and pulling down, we also do nothing so browser can show refresh if it wants
-
-                lastTouchY = currentY;
-            }, { passive: true });
         };
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
+        // === Robust Pull-to-Refresh Prevention (Mobile only) ===
+        // Allow normal scrolling everywhere. Only block the native refresh gesture when at the very top AND pulling down.
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+            if (e.touches.length !== 1) return;
+
+            const currentY = e.touches[0].clientY;
+            const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+
+            // If at the very top of the page and user is pulling down → prevent native pull-to-refresh
+            // This allows smooth scrolling back to top without triggering refresh, while still allowing refresh only from absolute top.
+            if (scrollTop <= 0 && currentY > touchStartY + 10) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
