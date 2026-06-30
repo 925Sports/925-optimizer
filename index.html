@@ -1012,14 +1012,22 @@
                     return calculateFantasyScore(log, sport);
                 }
 
-                const isPitcher = (log.position || '').toUpperCase().includes('P') || 
-                                  lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
-                                  lowerStat.includes('strikeout') || lowerStat.includes('earned run');
+                const looksLikePitcherLog = (log.position || '').toUpperCase().includes('P') || parseFloat(log.inningsPitched || log.IP || 0) > 0;
+                const isPitcherStat = lowerStat.includes('pitcher') || lowerStat.includes('ip') || lowerStat.includes('er') || 
+                                      lowerStat.includes('strikeout') || lowerStat.includes('earned run') || lowerStat.includes('k') || lowerStat.includes('so');
+                const isPitcher = looksLikePitcherLog || isPitcherStat;
 
                 if (isPitcher) {
                     if (lowerStat.includes('innings') || lowerStat.includes('ip')) return parseFloat(log.inningsPitched || log.IP || 0);
                     if (lowerStat.includes('earned') || lowerStat.includes('er')) return parseFloat(log.earnedRuns || log.ER || 0);
-                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so') || lowerStat.includes('pitcher strikeouts')) return parseFloat(log.strikeOutsPitching || log.strikeOuts || log['Strikeouts'] || log.K || log.SO || log['SO'] || 0);
+                    if (lowerStat.includes('strikeout') || lowerStat.includes('k') || lowerStat.includes('so')) {
+                        // Prefer pitching strikeouts when it looks like a pitching appearance or the prop is pitcher-specific
+                        if (looksLikePitcherLog || lowerStat.includes('pitcher')) {
+                            return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                        } else {
+                            return parseFloat(log.strikeOuts || log.K || 0);
+                        }
+                    }
                     if (lowerStat.includes('walk') || lowerStat.includes('bb')) return parseFloat(log.baseOnBallsPitching || log.BB || 0);
                     if (lowerStat.includes('hit') && !lowerStat.includes('hit by')) return parseFloat(log.hitsAllowed || log.H || 0);
                     if (lowerStat.includes('fantasy')) return calculateFantasyScore(log, sport);
@@ -2142,7 +2150,7 @@
             const statType = row['Stat Type'] || '';
             const playerName = row['Player Name'] || '';
             const team = row.Team || '';
-            const gameTitle = row['Game Short Title'] || (row.Opp ? `@ ${row.Opp}` : 'No Game');
+            const gameTitle = row['Game Short Title'] || (row.Opp ? `@ ${row.Opp}` : '');
             const betTag = (row['Bet Tag'] || '').trim();
             const oddsType = (row['Odds Type'] || 'standard').toLowerCase();
 
@@ -2297,7 +2305,7 @@
                 });
             }
 
-            // Search
+            // Simple global search
             const term = (searchInput.value || '').toLowerCase().trim();
             if (term) {
                 allRows = allRows.filter(r =>
@@ -2306,148 +2314,328 @@
                 );
             }
 
-            // Stat type filter (from tabs)
+            // Respect Stat Type tabs selection on "All" view (if user clicked any specific stat pills)
             if (window.allStatTypesSelected && window.allStatTypesSelected.size > 0) {
                 allRows = allRows.filter(r => window.allStatTypesSelected.has((r['Stat Type'] || '').trim()));
             }
 
-            // Selected only
-            if (selectedToggle.checked) {
+            // Selected Only filter (works on All tab)
+            if (selectedToggle && selectedToggle.checked) {
                 const selectedKeys = new Set(selectedBets.map(b => b.key));
-                allRows = allRows.filter(r => selectedKeys.has(`${r['Player Name']}-${r['Stat Type']}`));
+                allRows = allRows.filter(row => 
+                    selectedKeys.has(`${row['Player Name']}-${row['Stat Type']}`)
+                );
             }
 
-            // Sort (default Edge desc)
-            allRows.sort((a, b) => {
-                const aEdge = parseFloat(a['Edge %'] || 0);
-                const bEdge = parseFloat(b['Edge %'] || 0);
-                return bEdge - aEdge;
-            });
-
-            currentFiltered = allRows; // for popup navigation on All tab
+            // Sort by edge desc by default
+            allRows.sort((a, b) => (parseFloat(b['Edge %'] || 0) - parseFloat(a['Edge %'] || 0)));
 
             if (allRows.length === 0) {
-                contentDiv.innerHTML = '<div class="loading">No props match your current filters.</div>';
+                contentDiv.innerHTML = '<div class="loading">No bets available across sports for current filters.</div>';
+                updateStandardBetsCount();
                 return;
             }
 
-            // Render cards (or table if user switched)
-            const useTable = viewSelect.value === 'table';
-            if (useTable) {
-                // Simple table for All view
-                const table = document.createElement('table');
-                table.style.width = '100%';
-                table.style.borderCollapse = 'collapse';
-                table.style.fontSize = '13px';
+            // Determine view mode for All tab
+            const isTableView = (document.getElementById('viewSelect')?.value === 'table');
 
+            if (isTableView) {
+                // Load game logs in background for better L5/L20 data (non-blocking)
+                // We render the table immediately and show "-" where logs aren't available yet
+                Promise.allSettled([
+                    ensureGameLogsLoaded('nba'),
+                    ensureGameLogsLoaded('wnba'),
+                    ensureGameLogsLoaded('mlb')
+                ]).then(() => {
+                    // Optional: re-render once in background if user is still on All+Table
+                    // (helps if logs finish after first paint)
+                    if (currentSport === 'all' && document.getElementById('viewSelect')?.value === 'table') {
+                        // Only refresh if still in this exact state
+                        setTimeout(() => {
+                            if (currentSport === 'all' && document.getElementById('viewSelect')?.value === 'table') {
+                                renderAllView();
+                            }
+                        }, 800);
+                    }
+                });
+
+                // Render Table View for All tab immediately (don't block on logs)
+                contentDiv.classList.add('table-view');
+                const table = document.createElement('table');
                 const thead = document.createElement('thead');
+                const headers = ['Sport', 'Player', 'Stat', 'Line', 'Edge', 'PP vs UD', 'L5 Avg', 'L5 Hit%', 'L20 Avg', 'L20 Hit%', 'Actions'];
                 const headerRow = document.createElement('tr');
-                ['Player', 'Sport', 'Stat', 'Line', 'Edge', 'Actions'].forEach(label => {
+                headers.forEach(h => {
                     const th = document.createElement('th');
-                    th.textContent = label;
-                    th.style.padding = '10px 8px';
-                    th.style.background = '#222';
-                    th.style.color = '#ccc';
-                    th.style.borderBottom = '2px solid #333';
+                    th.textContent = h;
                     headerRow.appendChild(th);
                 });
                 thead.appendChild(headerRow);
                 table.appendChild(thead);
 
                 const tbody = document.createElement('tbody');
-                allRows.forEach((row, index) => {
+                // Limit initial render for speed on All tab (user can scroll or search for more)
+                allRows.slice(0, 300).forEach((row, idx) => {
                     const tr = document.createElement('tr');
-                    tr.style.borderBottom = '1px solid #333';
+                    const sportLabel = (row._sport || '').toUpperCase();
 
-                    const sport = row._sport || 'nba';
-                    let sportBadge = '';
-                    if (sport === 'nba') sportBadge = '🏀 NBA';
-                    else if (sport === 'wnba') sportBadge = '🏀 WNBA';
-                    else if (sport === 'mlb') sportBadge = '⚾ MLB';
-                    else if (sport === 'soccer') sportBadge = '⚽ Soccer';
+                    // Sport
+                    const tdSport = document.createElement('td');
+                    tdSport.textContent = sportLabel;
+                    tdSport.setAttribute('data-label', 'Sport');
+                    tr.appendChild(tdSport);
 
-                    tr.innerHTML = `
-                        <td style="padding:8px;">
-                            <div style="display:flex;align-items:center;gap:8px;">
-                                <img src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/28?text=?'}" style="width:28px;height:28px;border-radius:50%;border:1px solid #444;" alt="">
-                                <div>
-                                    <div style="font-weight:600;color:#00ffcc;">${row['Player Name']}</div>
-                                    <div style="font-size:10px;color:#888;">${row.Team || ''}</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td style="padding:8px;font-size:12px;">${sportBadge}</td>
-                        <td style="padding:8px;">${row['Stat Type'] || ''}</td>
-                        <td style="padding:8px;font-weight:600;">${row['Line Score'] || row.Line || '-'}</td>
-                        <td style="padding:8px;font-weight:700;color:#00ffcc;">${parseFloat(row['Edge %'] || 0).toFixed(1)}%</td>
-                        <td style="padding:8px;">
-                            <div class="buttons" style="margin:0;background:transparent;">
-                                <button class="button less" style="padding:6px 12px;font-size:12px;">↓ Less</button>
-                                <button class="button more" style="padding:6px 12px;font-size:12px;">↑ More</button>
-                            </div>
-                        </td>
+                    // Player + click to popup
+                    const tdPlayer = document.createElement('td');
+                    tdPlayer.innerHTML = `<strong style="color:#00ffcc; cursor:pointer;">${row['Player Name']}</strong>`;
+                    tdPlayer.setAttribute('data-label', 'Player');
+                    tdPlayer.onclick = () => showPlayerPopup(row, idx, row._sport);
+                    tr.appendChild(tdPlayer);
+
+                    // Stat
+                    const tdStat = document.createElement('td');
+                    tdStat.textContent = row['Stat Type'];
+                    tdStat.setAttribute('data-label', 'Stat');
+                    tr.appendChild(tdStat);
+
+                    // Line
+                    const tdLine = document.createElement('td');
+                    tdLine.textContent = row['Line Score'] || '-';
+                    tdLine.setAttribute('data-label', 'Line');
+                    tr.appendChild(tdLine);
+
+                    // Edge
+                    const tdEdge = document.createElement('td');
+                    const edgeVal = parseFloat(row['Edge %']) || 0;
+                    tdEdge.innerHTML = `<span style="color:#00ffcc; font-weight:600;">${edgeVal.toFixed(1)}%</span>`;
+                    tdEdge.setAttribute('data-label', 'Edge');
+                    tr.appendChild(tdEdge);
+
+                    // PP - UD column: Shows PrizePicks line minus Underdog line.
+                    // Shows "-" (and gray) when no valid Underdog line exists in data.
+                    // Positive = green (PP line > UD line), Negative = red (UD line > PP line).
+                    const tdPPUD = document.createElement('td');
+                    const ppLine = parseFloat(row['Line Score'] || row.Line || 0);
+                    const udLineVal = getUnderdogLine(row);
+
+                    let displayValue;
+                    let numericDiff = 0;
+                    if (udLineVal === null || udLineVal === undefined) {
+                        displayValue = '-';
+                        numericDiff = 0;
+                    } else {
+                        numericDiff = ppLine - udLineVal;
+                        displayValue = numericDiff.toFixed(1);
+                    }
+
+                    tdPPUD.textContent = displayValue;
+                    tdPPUD.style.color = numericDiff > 0 ? '#22c55e' : (numericDiff < 0 ? '#ef4444' : '#aaa');
+                    tdPPUD.setAttribute('data-label', 'PP vs UD');
+                    tr.appendChild(tdPPUD);
+
+                    // Calculate L5 and L20 using the fast playerLogCache (much faster than filter+sort every row)
+                    const normPlayer = normalizeName(row['Player Name'] || '');
+                    let playerLogs = (dataStore[row._sport]?.playerLogCache?.get(normPlayer) || []);
+                    
+                    // Fallback to nameMatches scan only if cache miss (should be rare)
+                    if (playerLogs.length === 0 && dataStore[row._sport]?.gameLogs?.length) {
+                        playerLogs = dataStore[row._sport].gameLogs.filter(l => 
+                            nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', row['Player Name'] || '')
+                        );
+                    }
+                    // Ensure sorted newest first
+                    playerLogs = [...playerLogs].sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+
+                    const line = parseFloat(row['Line Score'] || row.Line || 0);
+                    const betTag = (row['Bet Tag'] || '').toLowerCase();
+                    const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
+
+                    // L5
+                    const last5 = playerLogs.slice(0, 5);
+                    let l5Avg = '-', l5Hit = '-';
+                    if (last5.length > 0) {
+                        let sum = 0, hits = 0;
+                        last5.forEach(log => {
+                            const val = getStatValue(log, row['Stat Type'] || '', row._sport);
+                            sum += val;
+                            if (isMore ? val > line : val < line) hits++;
+                        });
+                        l5Avg = (sum / last5.length).toFixed(1);
+                        l5Hit = ((hits / last5.length) * 100).toFixed(0);
+                    }
+
+                    // L20
+                    const last20 = playerLogs.slice(0, 20);
+                    let l20Avg = '-', l20Hit = '-';
+                    if (last20.length > 0) {
+                        let sum = 0, hits = 0;
+                        last20.forEach(log => {
+                            const val = getStatValue(log, row['Stat Type'] || '', row._sport);
+                            sum += val;
+                            if (isMore ? val > line : val < line) hits++;
+                        });
+                        l20Avg = (sum / last20.length).toFixed(1);
+                        l20Hit = ((hits / last20.length) * 100).toFixed(0);
+                    }
+
+                    // L5 Avg
+                    const tdL5 = document.createElement('td');
+                    tdL5.textContent = l5Avg;
+                    tdL5.setAttribute('data-label', 'L5 Avg');
+                    tr.appendChild(tdL5);
+
+                    // L5 Hit%
+                    const tdL5Hit = document.createElement('td');
+                    tdL5Hit.textContent = l5Hit !== '-' ? l5Hit + '%' : '-';
+                    tdL5Hit.setAttribute('data-label', 'L5 Hit%');
+                    tr.appendChild(tdL5Hit);
+
+                    // L20 Avg
+                    const tdL20 = document.createElement('td');
+                    tdL20.textContent = l20Avg;
+                    tdL20.setAttribute('data-label', 'L20 Avg');
+                    tr.appendChild(tdL20);
+
+                    // L20 Hit%
+                    const tdL20Hit = document.createElement('td');
+                    tdL20Hit.textContent = l20Hit !== '-' ? l20Hit + '%' : '-';
+                    tdL20Hit.setAttribute('data-label', 'L20 Hit%');
+                    tr.appendChild(tdL20Hit);
+
+                    // Actions (More/Less buttons) - with Bet Tag visual hint (green/red outline)
+                    const tdActions = document.createElement('td');
+                    tdActions.setAttribute('data-label', 'Actions');
+                    const btnDiv = document.createElement('div');
+                    btnDiv.className = 'buttons';
+
+                    let lessClass = 'button less';
+                    let moreClass = 'button more';
+                    const bt = (row['Bet Tag'] || '').toLowerCase();
+                    if (bt.includes('over') || bt.includes('more') || bt.includes('↑')) moreClass += ' green-outline';
+                    if (bt.includes('under') || bt.includes('less') || bt.includes('↓')) lessClass += ' red-outline';
+
+                    btnDiv.innerHTML = `
+                        <button class="${lessClass}" data-choice="Less">↓ Less</button>
+                        <button class="${moreClass}" data-choice="More">↑ More</button>
                     `;
+                    tdActions.appendChild(btnDiv);
 
-                    const lessBtn = tr.querySelector('.button.less');
-                    const moreBtn = tr.querySelector('.button.more');
+                    // Attach click handlers (same behavior as individual sport tabs)
+                    const lessBtn = btnDiv.querySelector('.button.less');
+                    const moreBtn = btnDiv.querySelector('.button.more');
+                    if (lessBtn) {
+                        lessBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'Less', row._sport);
+                        };
+                    }
+                    if (moreBtn) {
+                        moreBtn.onclick = (e) => {
+                            e.stopImmediatePropagation();
+                            toggleBet(row, 'More', row._sport);
+                        };
+                    }
 
-                    lessBtn.onclick = (e) => {
-                        e.stopImmediatePropagation();
-                        toggleBet(row, 'Less', sport);
-                    };
-                    moreBtn.onclick = (e) => {
-                        e.stopImmediatePropagation();
-                        toggleBet(row, 'More', sport);
-                    };
-
-                    tr.onclick = (e) => {
-                        if (!e.target.closest('button')) {
-                            showPlayerPopup(row, index, sport);
-                        }
-                    };
+                    tr.appendChild(tdActions);
 
                     tbody.appendChild(tr);
                 });
-
                 table.appendChild(tbody);
                 contentDiv.appendChild(table);
             } else {
-                allRows.forEach((row, index) => {
-                    const card = createPlayerCard(row, index, row._sport || 'nba');
+                // Default: Card view for All tab
+                // (Info text moved to top header for cleaner flow — see updateSportTabs / title-header logic)
+
+                currentFiltered = allRows; // Enable swipe navigation from All tab
+
+                allRows.slice(0, 300).forEach((row, idx) => {
+                    const card = createPlayerCard(row, idx, row._sport);
                     contentDiv.appendChild(card);
                 });
             }
         }
 
         // ==================== PLAYER POPUP ====================
-        let currentPopupSport = '';
-
-        function showPlayerPopup(row, index, sport) {
-            const popup = document.getElementById('playerPopup');
-            const overlay = document.getElementById('overlay');
-
+        let currentPopupSport = 'nba';
+        async function showPlayerPopup(row, index, sport) {
             currentPopupSport = sport;
             currentRowIndex = index;
 
+            const popup = document.getElementById('playerPopup');
+            const overlay = document.getElementById('overlay');
             popup.style.display = 'block';
             overlay.style.display = 'block';
 
-            // Make it a bottom sheet on mobile
+            // Bottom sheet UX on mobile
             if (window.innerWidth <= 768) {
                 popup.classList.add('bottom-sheet');
-                setTimeout(() => popup.classList.add('show'), 10);
+
+                // Make popup more full-screen on mobile for reliable swiping (like Tinder)
+                popup.style.maxHeight = '96vh';
+
+                // Add drag handle if not present
+                if (!popup.querySelector('.drag-handle')) {
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'drag-handle';
+                    popup.insertBefore(dragHandle, popup.firstChild);
+                }
+
+                // On mobile, ensure only the inline bet buttons from Overview are shown (no floating bar)
+                const existingFloating = popup.querySelector('.mobile-bet-bar');
+                if (existingFloating) existingFloating.remove();
+
+                const inlineButtons = popup.querySelector('.popup-buttons');
+                if (inlineButtons) inlineButtons.style.display = '';
+
+                // Trigger animation
+                requestAnimationFrame(() => {
+                    popup.classList.add('show');
+                });
             } else {
                 popup.classList.remove('bottom-sheet', 'show');
+                popup.style.maxHeight = '';
+                const existingHandle = popup.querySelector('.drag-handle');
+                if (existingHandle) existingHandle.remove();
+                const existingBetBar = popup.querySelector('.mobile-bet-bar');
+                if (existingBetBar) existingBetBar.remove();
+
+                // Restore inline buttons on desktop
+                const inlineButtons = popup.querySelector('.popup-buttons');
+                if (inlineButtons) inlineButtons.style.display = '';
             }
 
-            const playerName = row['Player Name'];
+            const playerName = row['Player Name'] || '';
 
-            document.getElementById('popupName').innerHTML = playerName;
+            // Header (shown instantly)
+            const betTag = (row['Bet Tag'] || '').trim();
+            const lineVal = row['Line Score'] || row.Line || '-';
+            const statType = row['Stat Type'] || '';
+            const edgeVal = parseFloat(row['Edge %'] || 0).toFixed(1);
 
-            // Add game context info (DVP, O/U, Spread) if available
+            // Build header HTML safely to avoid template literal parsing issues
+            let betTagHTML = '';
+            if (betTag) {
+                const btLower = betTag.toLowerCase();
+                const isOverTag = btLower.includes('over') || btLower.includes('more') || btLower.includes('↑');
+                const bgColor = isOverTag ? '#22c55e' : '#ef4444';
+                betTagHTML = `<span style="font-size:12px; background:${bgColor}; color:#000; padding:2px 8px; border-radius:6px; font-weight:600;">${betTag}</span>`;
+            }
+
+            document.getElementById('popupName').innerHTML = `
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span>${row['Player Name']}</span>
+                    <span style="font-size:13px; color:#888;">${sport.toUpperCase()}</span>
+                    ${betTagHTML}
+                </div>
+                <div style="font-size:13px; color:#aaa; margin-top:4px;">
+                    ${statType} &nbsp;•&nbsp; Line: <strong>${lineVal}</strong> &nbsp;•&nbsp; Edge: <strong style="color:#00ffcc">${edgeVal}%</strong>
+                </div>
+            `;
+
+            // Game context info with color coding for MLB (O/U and Spread)
             const gameTotal = row['Game Total'] || row['Total'] || '';
-            const gameOU = row['O/U'] || row['Over/Under'] || row['ou'] || '';
-            const pointSpread = row['Spread'] || row['Point Spread'] || '';
+            const gameOU = row['Game O/U'] || row['O/U'] || row['Over/Under'] || '';
+            const pointSpread = row['Point Spread'] || row['Spread'] || '';
             const oppDvpRank = row['Opp DVP Rank'] || row['DVP Rank'] || row['Opponent DVP'] || '';
 
             // Clear previous gameInfo if any
@@ -2511,7 +2699,7 @@
 
             document.getElementById('popupHeadshot').src = row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/64?text=?';
             document.getElementById('popupTeamPos').innerHTML = `${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}`;
-            document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : 'No Game');
+            document.getElementById('popupGame').innerHTML = row['Game Short Title'] || row.Game || (row.Opp ? `@ ${row.Opp}` : '');
             document.getElementById('popupScheduledAt').innerHTML = row['Scheduled At'] ? new Date(row['Scheduled At']).toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '';
 
             // Initial L5 (will be '-' until game logs load in background)
@@ -2637,6 +2825,13 @@
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
                 let lastTap = 0;
                 let touchStartY = 0;
+                let popupTouchStartX = 0;  // declared early to avoid TDZ/reference issues in swipe handler
+
+                // Store touch start X for horizontal swipe (must be before touchend listener)
+                popup.addEventListener('touchstart', function(e) {
+                    popupTouchStartX = e.changedTouches[0].screenX;
+                    touchStartY = e.changedTouches[0].screenY;  // also capture here for consistency
+                }, { passive: true });
 
                 // Double-tap detection (only on header + main content, not deep scroll areas)
                 const doubleTapAreas = [popup.querySelector('.header'), popup.querySelector('#popupContent')].filter(Boolean);
@@ -2664,11 +2859,7 @@
                     }, { passive: false });
                 });
 
-                // Swipe down to close (on the whole popup)
-                popup.addEventListener('touchstart', function(e) {
-                    touchStartY = e.changedTouches[0].screenY;
-                }, { passive: true });
-
+                // Swipe down to close + horizontal page-turn swipe (on the whole popup)
                 popup.addEventListener('touchend', function(e) {
                     const touchEndY = e.changedTouches[0].screenY;
                     const diffY = touchStartY - touchEndY;
@@ -2698,7 +2889,8 @@
                                 popupContent.style.animation = 'slideInFromRight 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    navigatePopup(1);
+                                    const targetIdx = Math.min(currentRowIndex + 1, currentFiltered.length - 1);
+                                    showPlayerPopup(currentFiltered[targetIdx], targetIdx, currentPopupSport);
                                 }, 80);
                             }
                         } else {
@@ -2709,7 +2901,8 @@
                                 popupContent.style.animation = 'slideInFromLeft 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
 
                                 setTimeout(() => {
-                                    navigatePopup(-1);
+                                    const targetIdx = Math.max(currentRowIndex - 1, 0);
+                                    showPlayerPopup(currentFiltered[targetIdx], targetIdx, currentPopupSport);
                                 }, 80);
                             }
                         }
@@ -2717,12 +2910,6 @@
                 }, { passive: true });
 
             }
-            
-            // Store touch start X globally for the popup (for horizontal swipe)
-            let popupTouchStartX = 0;
-            popup.addEventListener('touchstart', function(e) {
-                popupTouchStartX = e.changedTouches[0].screenX;
-            }, { passive: true });
 
             // Tap backdrop to close
             const overlayEl = document.getElementById('overlay');
@@ -2806,25 +2993,13 @@
         }
 
         function navigatePopup(delta) {
+            // Navigation now works on All tab too (we set currentFiltered there)
             if (!currentFiltered || currentFiltered.length === 0) return;
-
-            // Re-find current position by key (player + stat) to handle any list reordering or filtering between navigations
-            const currentItem = currentFiltered[currentRowIndex] || {};
-            const currentKey = `${currentItem['Player Name'] || ''}-${currentItem['Stat Type'] || ''}`;
-            let currentPos = currentRowIndex;
-
-            for (let i = 0; i < currentFiltered.length; i++) {
-                const k = `${currentFiltered[i]['Player Name'] || ''}-${currentFiltered[i]['Stat Type'] || ''}`;
-                if (k === currentKey) {
-                    currentPos = i;
-                    break;
-                }
-            }
-
-            let newIndex = currentPos + delta;
+            let newIndex = currentRowIndex + delta;
             if (newIndex < 0) newIndex = currentFiltered.length - 1;
             if (newIndex >= currentFiltered.length) newIndex = 0;
-
+            // Extra safety clamp
+            newIndex = Math.max(0, Math.min(newIndex, currentFiltered.length - 1));
             showPlayerPopup(currentFiltered[newIndex], newIndex, currentPopupSport);
         }
 
@@ -2922,7 +3097,11 @@
                 if (matches.length === 0) {
                     contentDiv.innerHTML = `
                         <div style="padding:20px; color:#ccc; font-size:13px;">
-                            <strong>No other Sportsbooks have data for this bet, or betting data for this bet is currently not being pulled in.</strong>
+                            <strong>No other Sportsbooks have data for this bet, or betting data for this bet is currently not being pulled in.</strong><br><br>
+                            <div style="font-size:12px; color:#888;">
+                                We looked for <strong>${playerName}</strong> — <strong>${row['Stat Type']}</strong> near line <strong>${originalLine}</strong>.<br><br>
+                                Try checking a nearby line or a different player/stat.
+                            </div>
                         </div>`;
                     return;
                 }
@@ -2986,7 +3165,7 @@
 
                     html += `<tr style="border-bottom:1px solid #333;">
                         <td style="padding:5px 4px; font-weight:600; text-align:center;">${book}</td>
-                        <td style="padding:5px 4px; text-align:center; font-family:monospace;">${p.point || p.Point || p['point'] || '-'}</td>
+                        <td style="padding:5px 4px; text-align:center; font-family:monospace;">${p.point || p['point'] || '-'}</td>
                         <td style="padding:5px 4px; text-align:center; font-family:monospace;">${over}</td>
                         <td style="padding:5px 4px; text-align:center; font-family:monospace;">${under}</td>
                         <td style="padding:5px 4px; text-align:center;">${overPct}</td>
@@ -3001,7 +3180,7 @@
                 contentDiv.innerHTML = html;
 
             } catch (err) {
-                contentDiv.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">Error loading comparison data.</div>`;
+                contentDiv.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">No other Sportsbooks have data for this bet, or betting data for this bet is currently not being pulled in.</div>`;
             }
         }
 
@@ -3230,8 +3409,8 @@
                             let col2 = isHitter ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
                             let col3 = isHitter ? (log.runs || log.R || 0) : '-';
                             let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
-                            let hrVal = isHitter ? (log.homeRuns || log.HR || 0) : '-';
-                            let kVal = !isHitter ? (log.strikeOutsPitching || log.strikeOuts || log.K || log.SO || 0) : '-';
+                            let hrVal = isHitter ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
+                            let kVal = isHitter ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
                             let summary = log.gameLogSummary || log.Summary || log.note || '';
 
@@ -3991,30 +4170,34 @@
                 return;
             }
 
-            // Scope bets for current context (MLB tab + optional game filter)
-            let betsToUse = selectedBets;
-            if (currentSport !== 'all' && currentSport) {
-                betsToUse = selectedBets.filter(b => b.sport === currentSport);
-            }
-            const store = (currentSport && currentSport !== 'all') ? dataStore[currentSport] : null;
-            if (store && store.selectedGames && store.selectedGames.size > 0 && store.selectedGames.size < (store.uniqueGames || []).length) {
-                betsToUse = betsToUse.filter(b => store.selectedGames.has(b.game || ''));
+            // Use top 10 highest edge bets if more than 10 selected (allows selecting many, but keeps generation fast & within predefined combos limit)
+            let betsForSlips = selectedBets;
+
+            // Context-aware filtering: if on a specific sport tab (e.g. MLB), only include bets from that sport.
+            // Further, if game filters are active (not all games selected), only include bets from the selected games.
+            if (currentSport !== 'all') {
+                betsForSlips = betsForSlips.filter(b => b.sport === currentSport);
+                const store = dataStore[currentSport];
+                if (store && store.selectedGames && store.uniqueGames && store.selectedGames.size < store.uniqueGames.length) {
+                    betsForSlips = betsForSlips.filter(b => {
+                        const betGame = b.game || b['Game Short Title'] || b.gameTitle || '';
+                        return store.selectedGames.has(betGame);
+                    });
+                }
             }
 
-            if (betsToUse.length < 2) {
-                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Not enough bets in current filter (need at least 2). Adjust filters or add more bets.</td></tr>`;
+            if (betsForSlips.length < 2) {
+                tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;color:#ffcc00;">Not enough bets in current tab/filters to generate combinations (need at least 2).</td></tr>`;
                 return;
             }
 
-            // Use top 10 for combinations to keep performance good (predefined combos support up to 10)
-            let combosSource = betsToUse;
-            let limitNote = '';
-            if (betsToUse.length > 10) {
-                combosSource = betsToUse.slice(0, 10);
-                limitNote = `<div style="font-size:11px;color:#f59e0b;margin-bottom:6px;">Showing combinations from top 10 of ${betsToUse.length} selected bets.</div>`;
+            if (betsForSlips.length > 10) {
+                betsForSlips = [...betsForSlips]
+                    .sort((a, b) => (parseFloat(b.edge) || 0) - (parseFloat(a.edge) || 0))
+                    .slice(0, 10);
             }
 
-            const combinations = generateCombinations(combosSource);
+            const combinations = generateCombinations(betsForSlips);
             let outputData = [];
             for (let pickcount = 2; pickcount <= 6; pickcount++) {
                 outputData.push(...(combinations[pickcount] || []));
@@ -4104,8 +4287,10 @@
                 tbody.appendChild(tr);
             });
 
-            const scopedCount = (typeof betsToUse !== 'undefined' && betsToUse.length) ? betsToUse.length : selectedBets.length;
-            document.getElementById('betSlipCount').textContent = `(${scopedCount} legs • ${outputData.length} combos)${limitNote ? ' • top 10 used' : ''}`;
+            const legsUsed = betsForSlips.length;
+            const totalSelected = selectedBets.length;
+            const note = (currentSport !== 'all' || (dataStore[currentSport] && dataStore[currentSport].selectedGames && dataStore[currentSport].selectedGames.size < (dataStore[currentSport].uniqueGames||[]).length)) ? ' (filtered)' : '';
+            document.getElementById('betSlipCount').textContent = `(${legsUsed}/${totalSelected} legs${note} • ${outputData.length} combos)`;
         }
 
         function removeBet(index) {
@@ -4270,13 +4455,16 @@
 
         window.PP_DEBUG = { dataStore, selectedBets, currentSport };
 
-        // === Robust Pull-to-Refresh Prevention (Mobile only) ===
-        // Allow normal scrolling everywhere. Only block the native refresh gesture when at the very top AND pulling down.
-        let touchStartY = 0;
+        // === Improved Mobile Scroll & Pull-to-Refresh Handling ===
+        // - Scrolling (including swipe-down to return to top) now works smoothly without catching
+        // - Pull-to-refresh is allowed only when at the very top of the page (browser default behavior)
+        // - CSS overscroll-behavior-y: contain; on html/body already helps contain effects
+        // No aggressive preventDefault on normal touchmove to avoid breaking momentum scrolling or scroll-to-top gestures.
+        let lastTouchY = 0;
 
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length === 1) {
-                touchStartY = e.touches[0].clientY;
+                lastTouchY = e.touches[0].clientY;
             }
         }, { passive: true });
 
@@ -4285,13 +4473,16 @@
 
             const currentY = e.touches[0].clientY;
             const scrollTop = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            const isPullingDown = currentY > lastTouchY + 3; // small threshold
 
-            // If at the very top of the page and user is pulling down → prevent native pull-to-refresh
-            // This allows smooth scrolling back to top without triggering refresh, while still allowing refresh only from absolute top.
-            if (scrollTop <= 0 && currentY > touchStartY + 10) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+            // Only potentially prevent refresh gesture when exactly at top + pulling down further.
+            // But to allow intentional refresh at top AND smooth scrolling everywhere else, we do NOT call preventDefault here.
+            // The existing CSS rules handle overscroll containment for most browsers.
+            // If you want to completely disable pull-to-refresh, uncomment the next line:
+            // if (scrollTop <= 2 && isPullingDown) { e.preventDefault(); }
+
+            lastTouchY = currentY;
+        }, { passive: true });
     </script>
 </body>
 </html>
