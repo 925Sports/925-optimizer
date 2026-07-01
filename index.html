@@ -987,20 +987,61 @@
         }
 
         function nameMatches(logName, playerName) {
-            const n1 = normalizeName(logName);
-            const n2 = normalizeName(playerName);
-            if (!n1 || !n2) return false;
-            if (n1 === n2) return true;
-            if (n1.includes(n2) || n2.includes(n1)) return true;
+            if (!logName || !playerName) return false;
 
-            // Extra fuzzy: last name match if first names are close
-            const parts1 = logName.toLowerCase().split(/\s+/);
-            const parts2 = playerName.toLowerCase().split(/\s+/);
-            if (parts1.length > 1 && parts2.length > 1) {
-                const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
-                const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                if (last1 && last2 && last1 === last2) return true;
+            // Normalize while preserving spaces for accurate first/last name splitting.
+            // This version is local to avoid changing behavior of the global normalizeName (used for cache keys).
+            function normalizeKeepSpaces(name) {
+                if (!name) return '';
+                let n = name.toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                n = n.replace(/\bjr\b/g, '')
+                     .replace(/\bsr\b/g, '')
+                     .replace(/\biii\b/g, '')
+                     .replace(/\bii\b/g, '')
+                     .replace(/\s+/g, ' ')
+                     .trim();
+                return n;
             }
+
+            const cleanedLog = normalizeKeepSpaces(logName);
+            const cleanedPlayer = normalizeKeepSpaces(playerName);
+
+            if (!cleanedLog || !cleanedPlayer) return false;
+
+            const noSpaceLog = cleanedLog.replace(/\s+/g, '');
+            const noSpacePlayer = cleanedPlayer.replace(/\s+/g, '');
+
+            if (noSpaceLog === noSpacePlayer) return true;
+            if (noSpaceLog.includes(noSpacePlayer) || noSpacePlayer.includes(noSpaceLog)) return true;
+
+            // Split into parts for first/last name verification
+            const logParts = cleanedLog.split(/\s+/).filter(p => p.length > 0);
+            const playerParts = cleanedPlayer.split(/\s+/).filter(p => p.length > 0);
+
+            if (logParts.length === 0 || playerParts.length === 0) return false;
+
+            const logLast = logParts[logParts.length - 1];
+            const playerLast = playerParts[playerParts.length - 1];
+
+            if (!logLast || !playerLast || logLast !== playerLast) return false;
+
+            // Last names match. Now require first-name compatibility to prevent cross-player matches
+            // (e.g. "John Smith" should not match "Mike Smith").
+            if (logParts.length === 1 || playerParts.length === 1) {
+                // Only last name present — accept (rare in full game logs)
+                return true;
+            }
+
+            const logFirst = logParts[0];
+            const playerFirst = playerParts[0];
+
+            if (logFirst === playerFirst) return true;
+            if (logFirst.startsWith(playerFirst) || playerFirst.startsWith(logFirst)) return true;
+            if (logFirst[0] === playerFirst[0]) return true; // same first initial + same last name (covers nicknames/abbreviations)
+
             return false;
         }
         function getStatValue(log, statType, sport = 'nba') {
