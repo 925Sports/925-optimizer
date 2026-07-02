@@ -1026,6 +1026,11 @@
                         // return IP, AB, or batting strikeouts.
                         const isPitcherStrikeoutProp = lowerStat.includes('pitcher') && lowerStat.includes('strikeout');
                         if (isPitcherStrikeoutProp || looksLikePitcherLog || lowerStat.includes('pitcher')) {
+                            // Prefer strikeOutsPitching for pitcher strikeout props; fall back gracefully
+                            const pitchingK = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
+                            if (pitchingK > 0 || isPitcherStrikeoutProp) {
+                                return pitchingK || parseFloat(log.strikeOuts || log.K || 0);
+                            }
                             return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                         } else {
                             return parseFloat(log.strikeOuts || log.K || 0);
@@ -3370,16 +3375,8 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
-
-                // For Pitcher Strikeouts props, only show actual pitching appearances (IP > 0).
-                // Non-pitching days (IP = 0 or "-") should not appear in the Game Log for these props.
-                const isPitcherStrikeoutPropForGameLog = sport === 'mlb' && 
-                    ((row['Stat Type'] || '').toLowerCase().includes('strikeout') && (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
-                if (isPitcherStrikeoutPropForGameLog) {
-                    logs = logs.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
-                }
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
                 if (logs.length === 0) {
@@ -3414,11 +3411,13 @@
                             const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
                             const abVal = parseFloat(log.atBats || log.AB || 0);
                             const pos = (log.primaryPosition_name || log.position || '').toUpperCase();
-                            const looksLikePitcher = pos.includes('P') || ipVal > 0;
-                            const isHitterRow = abVal > 0 && !looksLikePitcher;
 
-                            // Skip logic: for Pitcher Strikeouts we already pre-filtered to IP > 0 above.
-                            // For other props, skip non-hitter rows with zero IP.
+                            // Improved classification for pitchers vs hitters
+                            const looksLikePitcherLogRow = pos.includes('P') || ipVal > 0;
+                            const isHitterRow = abVal > 0 && !looksLikePitcherLogRow;
+
+                            // For pitcher props (especially Pitcher Strikeouts), include the log if it has IP or is clearly a pitching appearance.
+                            // Only skip clearly non-pitching, zero-IP logs.
                             const isPitcherStrikeoutProp = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
                                                            (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
                             if (!isPitcherStrikeoutProp && !isHitterRow && ipVal === 0) return;
@@ -3429,6 +3428,7 @@
                             let col4 = isHitterRow ? (log.rbi || log.RBI || 0) : '-';
                             let hrVal = isHitterRow ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
 
+                            // For Pitcher Strikeouts props, always prefer the pitching strikeouts field
                             let kVal;
                             if (isPitcherStrikeoutProp) {
                                 kVal = parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
@@ -3729,11 +3729,22 @@
                     const betTagLower = (row['Bet Tag'] || '').toLowerCase();
                     const isMoreBet = betTagLower.includes('↑') || betTagLower.includes('more') || betTagLower.includes('over');
 
+                    const isPitcherStrikeoutPropForSplits = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
+                                                           (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
+
+                    const getPitcherStrikeoutValue = (log) => {
+                        // Force correct field for Pitcher Strikeouts props
+                        if (isPitcherStrikeoutPropForSplits) {
+                            return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                        }
+                        return getStatValue(log, row['Stat Type'] || '', sport);
+                    };
+
                     const calculateHitRate = (logs) => {
                         if (!logs.length) return 0;
                         let hits = 0;
                         logs.forEach(log => {
-                            let value = getStatValue(log, row['Stat Type'] || '', sport);
+                            let value = getPitcherStrikeoutValue(log);
                             if (isMoreBet) {
                                 if (value > lineScore) hits++;
                             } else {
@@ -3768,7 +3779,7 @@
                             const d = log.gameDate || log['GAME DATE'] || log.date || '';
                             return d ? d.slice(5) : '';
                         });
-                        const chartValues = recentLogs.map(log => getStatValue(log, row['Stat Type'] || '', sport));
+                        const chartValues = recentLogs.map(log => getPitcherStrikeoutValue(log));
                         const barColors = chartValues.map(v => v > lineScore ? '#22c55e' : '#ef4444');
 
                         if (window.ChartDataLabels) {
