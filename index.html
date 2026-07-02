@@ -987,61 +987,20 @@
         }
 
         function nameMatches(logName, playerName) {
-            if (!logName || !playerName) return false;
+            const n1 = normalizeName(logName);
+            const n2 = normalizeName(playerName);
+            if (!n1 || !n2) return false;
+            if (n1 === n2) return true;
+            if (n1.includes(n2) || n2.includes(n1)) return true;
 
-            // Normalize while preserving spaces for accurate first/last name splitting.
-            // This version is local to avoid changing behavior of the global normalizeName (used for cache keys).
-            function normalizeKeepSpaces(name) {
-                if (!name) return '';
-                let n = name.toLowerCase()
-                    .replace(/[^a-z0-9\s]/g, ' ')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                n = n.replace(/\bjr\b/g, '')
-                     .replace(/\bsr\b/g, '')
-                     .replace(/\biii\b/g, '')
-                     .replace(/\bii\b/g, '')
-                     .replace(/\s+/g, ' ')
-                     .trim();
-                return n;
+            // Extra fuzzy: last name match if first names are close
+            const parts1 = logName.toLowerCase().split(/\s+/);
+            const parts2 = playerName.toLowerCase().split(/\s+/);
+            if (parts1.length > 1 && parts2.length > 1) {
+                const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
+                const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
+                if (last1 && last2 && last1 === last2) return true;
             }
-
-            const cleanedLog = normalizeKeepSpaces(logName);
-            const cleanedPlayer = normalizeKeepSpaces(playerName);
-
-            if (!cleanedLog || !cleanedPlayer) return false;
-
-            const noSpaceLog = cleanedLog.replace(/\s+/g, '');
-            const noSpacePlayer = cleanedPlayer.replace(/\s+/g, '');
-
-            if (noSpaceLog === noSpacePlayer) return true;
-            if (noSpaceLog.includes(noSpacePlayer) || noSpacePlayer.includes(noSpaceLog)) return true;
-
-            // Split into parts for first/last name verification
-            const logParts = cleanedLog.split(/\s+/).filter(p => p.length > 0);
-            const playerParts = cleanedPlayer.split(/\s+/).filter(p => p.length > 0);
-
-            if (logParts.length === 0 || playerParts.length === 0) return false;
-
-            const logLast = logParts[logParts.length - 1];
-            const playerLast = playerParts[playerParts.length - 1];
-
-            if (!logLast || !playerLast || logLast !== playerLast) return false;
-
-            // Last names match. Now require first-name compatibility to prevent cross-player matches
-            // (e.g. "John Smith" should not match "Mike Smith").
-            if (logParts.length === 1 || playerParts.length === 1) {
-                // Only last name present — accept (rare in full game logs)
-                return true;
-            }
-
-            const logFirst = logParts[0];
-            const playerFirst = playerParts[0];
-
-            if (logFirst === playerFirst) return true;
-            if (logFirst.startsWith(playerFirst) || playerFirst.startsWith(logFirst)) return true;
-            if (logFirst[0] === playerFirst[0]) return true; // same first initial + same last name (covers nicknames/abbreviations)
-
             return false;
         }
         function getStatValue(log, statType, sport = 'nba') {
@@ -1067,6 +1026,11 @@
                         // return IP, AB, or batting strikeouts.
                         const isPitcherStrikeoutProp = lowerStat.includes('pitcher') && lowerStat.includes('strikeout');
                         if (isPitcherStrikeoutProp || looksLikePitcherLog || lowerStat.includes('pitcher')) {
+                            // Prefer strikeOutsPitching for pitcher strikeout props; fall back gracefully
+                            const pitchingK = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
+                            if (pitchingK > 0 || isPitcherStrikeoutProp) {
+                                return pitchingK || parseFloat(log.strikeOuts || log.K || 0);
+                            }
                             return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                         } else {
                             return parseFloat(log.strikeOuts || log.K || 0);
@@ -3444,27 +3408,32 @@
                         const fp = calculateFantasyScore(log, sport).toFixed(1);
 
                         if (sport === 'mlb') {
-                            const isHitter = parseFloat(log.atBats || log.AB || 0) > 0 || 
-                                             ((log.primaryPosition_name || '').toLowerCase().includes('pitch') === false && parseFloat(log.inningsPitched || log.IP || 0) === 0);
                             const ipVal = parseFloat(log.inningsPitched || log.IP || 0);
-                            if (!isHitter && ipVal === 0) return;
+                            const abVal = parseFloat(log.atBats || log.AB || 0);
+                            const pos = (log.primaryPosition_name || log.position || '').toUpperCase();
 
-                            let col1 = isHitter ? (log.atBats || log.AB || '-') : (log.inningsPitched || log.IP || '-');
-                            let col2 = isHitter ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
-                            let col3 = isHitter ? (log.runs || log.R || 0) : '-';
-                            let col4 = isHitter ? (log.rbi || log.RBI || 0) : '-';
-                            let hrVal = isHitter ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
+                            // Improved classification for pitchers vs hitters
+                            const looksLikePitcherLogRow = pos.includes('P') || ipVal > 0;
+                            const isHitterRow = abVal > 0 && !looksLikePitcherLogRow;
 
-                            // For Pitcher Strikeouts props, always prefer the pitching strikeouts field (strikeOutsPitching)
-                            // even if the individual game log row has incomplete position/IP data. This prevents
-                            // showing IP/AB or batting strikeouts instead of the correct pitcher K value.
+                            // For pitcher props (especially Pitcher Strikeouts), include the log if it has IP or is clearly a pitching appearance.
+                            // Only skip clearly non-pitching, zero-IP logs.
                             const isPitcherStrikeoutProp = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
                                                            (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
+                            if (!isPitcherStrikeoutProp && !isHitterRow && ipVal === 0) return;
+
+                            let col1 = isHitterRow ? (log.atBats || log.AB || '-') : (log.inningsPitched || log.IP || '-');
+                            let col2 = isHitterRow ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
+                            let col3 = isHitterRow ? (log.runs || log.R || 0) : '-';
+                            let col4 = isHitterRow ? (log.rbi || log.RBI || 0) : '-';
+                            let hrVal = isHitterRow ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
+
+                            // For Pitcher Strikeouts props, always prefer the pitching strikeouts field
                             let kVal;
                             if (isPitcherStrikeoutProp) {
                                 kVal = parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             } else {
-                                kVal = isHitter ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                                kVal = isHitterRow ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             }
 
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
@@ -3760,11 +3729,22 @@
                     const betTagLower = (row['Bet Tag'] || '').toLowerCase();
                     const isMoreBet = betTagLower.includes('↑') || betTagLower.includes('more') || betTagLower.includes('over');
 
+                    const isPitcherStrikeoutPropForSplits = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
+                                                           (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
+
+                    const getPitcherStrikeoutValue = (log) => {
+                        // Force correct field for Pitcher Strikeouts props
+                        if (isPitcherStrikeoutPropForSplits) {
+                            return parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
+                        }
+                        return getStatValue(log, row['Stat Type'] || '', sport);
+                    };
+
                     const calculateHitRate = (logs) => {
                         if (!logs.length) return 0;
                         let hits = 0;
                         logs.forEach(log => {
-                            let value = getStatValue(log, row['Stat Type'] || '', sport);
+                            let value = getPitcherStrikeoutValue(log);
                             if (isMoreBet) {
                                 if (value > lineScore) hits++;
                             } else {
@@ -3799,7 +3779,7 @@
                             const d = log.gameDate || log['GAME DATE'] || log.date || '';
                             return d ? d.slice(5) : '';
                         });
-                        const chartValues = recentLogs.map(log => getStatValue(log, row['Stat Type'] || '', sport));
+                        const chartValues = recentLogs.map(log => getPitcherStrikeoutValue(log));
                         const barColors = chartValues.map(v => v > lineScore ? '#22c55e' : '#ef4444');
 
                         if (window.ChartDataLabels) {
