@@ -2713,22 +2713,7 @@
             // Initial L5 (will be '-' until game logs load in background)
             let l5Avg = '-';
             let l5HitPct = '-';
-            let logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
-            
-            // MLB: Filter to only actual appearances (IP > 0 for pitchers, AB > 0 for hitters)
-            // so L5 Avg / L5 Hit in header matches the Splits tab calculation
-            if (sport === 'mlb' && logsForL5.length > 0) {
-                const statLower = (row['Stat Type'] || '').toLowerCase();
-                const isPitcherProp = statLower.includes('pitcher') || statLower.includes('ip') || 
-                                      statLower.includes('earned run') || statLower.includes('strikeout') ||
-                                      statLower.includes('hits allowed');
-                if (isPitcherProp) {
-                    logsForL5 = logsForL5.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
-                } else {
-                    logsForL5 = logsForL5.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
-                }
-            }
-            
+            const logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
             if (logsForL5.length > 0) {
                 const sortedLogs = [...logsForL5].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                 const last5 = sortedLogs.slice(0, 5);
@@ -2767,21 +2752,7 @@
                     // Recompute L5 stats now that logs are loaded
                     let newL5Avg = '-';
                     let newL5HitPct = '-';
-                    let freshLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
-                    
-                    // MLB: Filter to only actual appearances (same logic as initial L5 + Splits tab)
-                    if (sport === 'mlb' && freshLogs.length > 0) {
-                        const statLower = (row['Stat Type'] || '').toLowerCase();
-                        const isPitcherProp = statLower.includes('pitcher') || statLower.includes('ip') || 
-                                              statLower.includes('earned run') || statLower.includes('strikeout') ||
-                                              statLower.includes('hits allowed');
-                        if (isPitcherProp) {
-                            freshLogs = freshLogs.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
-                        } else {
-                            freshLogs = freshLogs.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
-                        }
-                    }
-                    
+                    const freshLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     if (freshLogs.length > 0) {
                         const sorted = [...freshLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                         const last5Logs = sorted.slice(0, 5);
@@ -3404,8 +3375,25 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
+
+                // For MLB pitcher props, pre-filter logs to ONLY actual pitching appearances (IP > 0).
+                // This ensures we show up to the last 30 real outings instead of limiting to ~30 calendar days
+                // (which previously included many DNP / non-pitching days for pitchers).
+                if (sport === 'mlb') {
+                    const isPitcherPropForGameLog = (row['Stat Type'] || '').toLowerCase().includes('pitcher') ||
+                        (row['Stat Type'] || '').toLowerCase().includes('ip') ||
+                        (row['Stat Type'] || '').toLowerCase().includes('earned run') ||
+                        (row['Stat Type'] || '').toLowerCase().includes('strikeout') ||
+                        (row['Stat Type'] || '').toLowerCase().includes('hits allowed');
+                    if (isPitcherPropForGameLog) {
+                        logs = logs.filter(log => {
+                            const ipNum = parseFloat(log.inningsPitched || log.IP || 0);
+                            return !isNaN(ipNum) && ipNum > 0;
+                        });
+                    }
+                }
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
                 if (logs.length === 0) {
