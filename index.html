@@ -3370,13 +3370,18 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
-                const displayCount = (sport === 'mlb' && (row['Stat Type'] || '').toLowerCase().includes('pitcher')) 
-                    ? filteredLogs.length 
-                    : logs.length;
-                let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${displayCount} pitching games) — Most Recent First</h4>`;
+                // For Pitcher Strikeouts props, only show actual pitching appearances (IP > 0).
+                // Non-pitching days (IP = 0 or "-") should not appear in the Game Log for these props.
+                const isPitcherStrikeoutPropForGameLog = sport === 'mlb' && 
+                    ((row['Stat Type'] || '').toLowerCase().includes('strikeout') && (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
+                if (isPitcherStrikeoutPropForGameLog) {
+                    logs = logs.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
+                }
+
+                let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
                 if (logs.length === 0) {
                     html += `<p style="color:#888;">No game log data available for this player in the loaded CSV.</p>`;
                 } else {
@@ -3410,25 +3415,25 @@
                             const abVal = parseFloat(log.atBats || log.AB || 0);
                             const pos = (log.primaryPosition_name || log.position || '').toUpperCase();
                             const looksLikePitcher = pos.includes('P') || ipVal > 0;
+                            const isHitterRow = abVal > 0 && !looksLikePitcher;
 
-                            // For Pitcher Strikeouts (and other pitcher props), we already pre-filtered to IP > 0.
-                            // Treat almost all remaining rows as pitching logs for display purposes.
+                            // Skip logic: for Pitcher Strikeouts we already pre-filtered to IP > 0 above.
+                            // For other props, skip non-hitter rows with zero IP.
                             const isPitcherStrikeoutProp = ((row['Stat Type'] || '').toLowerCase().includes('strikeout') &&
                                                            (row['Stat Type'] || '').toLowerCase().includes('pitcher'));
-                            const treatAsPitcher = isPitcherStrikeoutProp || looksLikePitcher || ipVal > 0;
+                            if (!isPitcherStrikeoutProp && !isHitterRow && ipVal === 0) return;
 
-                            let col1 = treatAsPitcher ? (log.inningsPitched || log.IP || (ipVal > 0 ? ipVal.toFixed(1) : '-')) : (log.atBats || log.AB || '-');
-                            let col2 = treatAsPitcher ? (log.earnedRuns || log.ER || 0) : (log.hits || log.H || 0);
-                            let col3 = treatAsPitcher ? '-' : (log.runs || log.R || 0);
-                            let col4 = treatAsPitcher ? '-' : (log.rbi || log.RBI || 0);
-                            let hrVal = treatAsPitcher ? (log.homeRuns || log.HR || 0) : (log.homeRuns || log.HR || 0);
+                            let col1 = isHitterRow ? (log.atBats || log.AB || '-') : (log.inningsPitched || log.IP || '-');
+                            let col2 = isHitterRow ? (log.hits || log.H || 0) : (log.earnedRuns || log.ER || 0);
+                            let col3 = isHitterRow ? (log.runs || log.R || 0) : '-';
+                            let col4 = isHitterRow ? (log.rbi || log.RBI || 0) : '-';
+                            let hrVal = isHitterRow ? (log.homeRuns || log.HR || 0) : (log.homeRuns || 0);
 
-                            // Always prefer strikeOutsPitching for Pitcher Strikeouts props
                             let kVal;
                             if (isPitcherStrikeoutProp) {
                                 kVal = parseFloat(log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             } else {
-                                kVal = treatAsPitcher ? (log.strikeOutsPitching || log.strikeOuts || log.K || 0) : (log.strikeOuts || 0);
+                                kVal = isHitterRow ? (log.strikeOuts || 0) : (log.strikeOutsPitching || log.strikeOuts || log.K || 0);
                             }
 
                             let bb = log.baseOnBalls || log.BB || log.baseOnBallsPitching || 0;
