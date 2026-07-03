@@ -3429,18 +3429,18 @@
                 // Properly pull pitcher game logs: only include rows that actually contain pitching statistics for this player.
                 // This prevents pulling batting lines, relief appearances without real data, or mismatched rows.
                 if (sport === 'mlb') {
-                    const isPitcherPropForGameLog = (row['Stat Type'] || '').toLowerCase().includes('pitcher') ||
-                        (row['Stat Type'] || '').toLowerCase().includes('ip') ||
-                        (row['Stat Type'] || '').toLowerCase().includes('earned run') ||
-                        (row['Stat Type'] || '').toLowerCase().includes('strikeout') ||
-                        (row['Stat Type'] || '').toLowerCase().includes('hits allowed');
+                    // Only treat as pitcher prop if the stat type explicitly mentions "pitcher".
+                    // This prevents "Strikeouts" (hitter) or other hitter props from incorrectly triggering the pitcher filter.
+                    const statLower = (row['Stat Type'] || '').toLowerCase();
+                    const isPitcherPropForGameLog = statLower.includes('pitcher');
+
                     if (isPitcherPropForGameLog) {
                         logs = logs.filter(log => {
                             const ip = parseFloat(log.inningsPitched || log.IP || 0);
                             const er = parseFloat(log.earnedRuns || log.ER || 0);
                             const kPitch = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
                             const bbPitch = parseFloat(log.baseOnBallsPitching || log['Base on Balls Pitching'] || 0);
-                            const hitsAllowed = parseFloat(log.hitsAllowed || log.H || 0); // for pitcher hits allowed props
+                            const hitsAllowed = parseFloat(log.hitsAllowed || log.H || 0);
                             // Must have at least one real pitching stat populated
                             return ip > 0 || er > 0 || kPitch > 0 || bbPitch > 0 || hitsAllowed > 0;
                         });
