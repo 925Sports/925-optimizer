@@ -1009,7 +1009,10 @@
             const ip = parseFloat(log.inningsPitched || log.IP || 0);
             const kPitching = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
             const pos = (log.position || log.Position || log['Position'] || '').toString().toUpperCase();
-            return (ip > 0) || (kPitching > 0) || pos.includes('P');
+            // For "Pitcher Fantasy Score", "Pitcher Strikeouts", etc. we want actual starts / real pitching outings,
+            // not relief appearances. IP >= 4 is a strong, simple, and effective proxy (relievers almost never go 4+ IP).
+            // We keep a small fallback for clear starters with slightly lower IP or high K in short outings.
+            return (ip >= 4) || (kPitching >= 4) || (pos.includes('P') && ip >= 3);
         }
 
         function getStatValue(log, statType, sport = 'nba') {
@@ -3423,7 +3426,8 @@
                 let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
-                // FIX for pitcher Game Logs: use robust isPitchingAppearance filter for pitcher props
+                // Properly pull pitcher game logs: only include rows that actually contain pitching statistics for this player.
+                // This prevents pulling batting lines, relief appearances without real data, or mismatched rows.
                 if (sport === 'mlb') {
                     const isPitcherPropForGameLog = (row['Stat Type'] || '').toLowerCase().includes('pitcher') ||
                         (row['Stat Type'] || '').toLowerCase().includes('ip') ||
@@ -3431,7 +3435,15 @@
                         (row['Stat Type'] || '').toLowerCase().includes('strikeout') ||
                         (row['Stat Type'] || '').toLowerCase().includes('hits allowed');
                     if (isPitcherPropForGameLog) {
-                        logs = logs.filter(isPitchingAppearance);
+                        logs = logs.filter(log => {
+                            const ip = parseFloat(log.inningsPitched || log.IP || 0);
+                            const er = parseFloat(log.earnedRuns || log.ER || 0);
+                            const kPitch = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
+                            const bbPitch = parseFloat(log.baseOnBallsPitching || log['Base on Balls Pitching'] || 0);
+                            const hitsAllowed = parseFloat(log.hitsAllowed || log.H || 0); // for pitcher hits allowed props
+                            // Must have at least one real pitching stat populated
+                            return ip > 0 || er > 0 || kPitch > 0 || bbPitch > 0 || hitsAllowed > 0;
+                        });
                     }
                 }
 
