@@ -3435,15 +3435,9 @@
                     const isPitcherPropForGameLog = statLower.includes('pitcher');
 
                     if (isPitcherPropForGameLog) {
-                        logs = logs.filter(log => {
-                            const ip = parseFloat(log.inningsPitched || log.IP || 0);
-                            const er = parseFloat(log.earnedRuns || log.ER || 0);
-                            const kPitch = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
-                            const bbPitch = parseFloat(log.baseOnBallsPitching || log['Base on Balls Pitching'] || 0);
-                            const hitsAllowed = parseFloat(log.hitsAllowed || log.H || 0);
-                            // Must have at least one real pitching stat populated
-                            return ip > 0 || er > 0 || kPitch > 0 || bbPitch > 0 || hitsAllowed > 0;
-                        });
+                        // Use the same robust pitching appearance filter as the Splits tab for consistency.
+                        // This properly excludes low-IP relief appearances for "Pitcher Strikeouts" and similar props.
+                        logs = logs.filter(isPitchingAppearance);
                     }
                 }
 
