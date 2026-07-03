@@ -1003,6 +1003,15 @@
             }
             return false;
         }
+
+        function isPitchingAppearance(log) {
+            if (!log) return false;
+            const ip = parseFloat(log.inningsPitched || log.IP || 0);
+            const kPitching = parseFloat(log.strikeOutsPitching || log['Strike Outs'] || 0);
+            const pos = (log.position || log.Position || log['Position'] || '').toString().toUpperCase();
+            return (ip > 0) || (kPitching > 0) || pos.includes('P');
+        }
+
         function getStatValue(log, statType, sport = 'nba') {
             const s = (statType || '').toLowerCase();
             if (sport === 'mlb') {
@@ -1863,7 +1872,19 @@
                             );
                         }
                         playerLogs = [...playerLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
-                        const last5 = playerLogs.slice(0, 5);
+                        
+                        // FIX for pitcher game logs in table L5/L20: only use actual pitching appearances for pitcher props
+                        let calcLogs = playerLogs;
+                        if (currentSport === 'mlb') {
+                            const statL = (row['Stat Type'] || '').toLowerCase();
+                            const isPitcherPropCalc = statL.includes('pitcher') || statL.includes('ip') || statL.includes('earned run') || 
+                                                      statL.includes('strikeout') || statL.includes('hits allowed');
+                            if (isPitcherPropCalc) {
+                                calcLogs = playerLogs.filter(isPitchingAppearance);
+                            }
+                        }
+                        
+                        const last5 = calcLogs.slice(0, 5);
                         const line = parseFloat(row['Line Score'] || row.Line || 0);
                         const betTag = (row['Bet Tag'] || '').toLowerCase();
                         const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
@@ -1890,7 +1911,7 @@
                         }
 
                         // L20 calculation
-                        const last20 = playerLogs.slice(0, 20);
+                        const last20 = calcLogs.slice(0, 20);
                         if (last20.length > 0) {
                             let sum20 = 0;
                             let hits20 = 0;
@@ -1964,6 +1985,9 @@
                             return store.contentSortDirection === 'asc' ? aVal - bVal : bVal - aVal;
                         });
                     }
+
+                    // FIX #2: Set currentFiltered to the exact sorted order used for the table rows and onclick indices
+                    currentFiltered = sortedFiltered;
 
                     sortedFiltered.forEach((row, index) => {
                         const tr = document.createElement('tr');
@@ -2042,9 +2066,19 @@
 
                         if (l5Avg === '-' || l20Avg === '-') {
                             const normPlayer = normalizeName(row['Player Name'] || '');
-                            const logs = (dataStore[currentSport]?.gameLogs || []).filter(l => 
+                            let logs = (dataStore[currentSport]?.gameLogs || []).filter(l => 
                                 normalizeName(l.PLAYER || l['Player Name'] || '') === normPlayer
                             ).sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
+
+                            // Apply pitcher filter for L5/L20 recalc if needed
+                            if (currentSport === 'mlb') {
+                                const statL = (row['Stat Type'] || '').toLowerCase();
+                                const isPitcherPropCalc = statL.includes('pitcher') || statL.includes('ip') || statL.includes('earned run') || 
+                                                          statL.includes('strikeout') || statL.includes('hits allowed');
+                                if (isPitcherPropCalc) {
+                                    logs = logs.filter(isPitchingAppearance);
+                                }
+                            }
 
                             const line = parseFloat(row['Line Score'] || row.Line || 0);
                             const betTag = (row['Bet Tag'] || '').toLowerCase();
@@ -2454,12 +2488,23 @@
                     // Ensure sorted newest first
                     playerLogs = [...playerLogs].sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
+                    // Apply pitcher filter for All tab table L5/L20 when applicable
+                    let calcLogsAll = playerLogs;
+                    if (row._sport === 'mlb') {
+                        const statL = (row['Stat Type'] || '').toLowerCase();
+                        const isPitcherPropCalc = statL.includes('pitcher') || statL.includes('ip') || statL.includes('earned run') || 
+                                                  statL.includes('strikeout') || statL.includes('hits allowed');
+                        if (isPitcherPropCalc) {
+                            calcLogsAll = playerLogs.filter(isPitchingAppearance);
+                        }
+                    }
+
                     const line = parseFloat(row['Line Score'] || row.Line || 0);
                     const betTag = (row['Bet Tag'] || '').toLowerCase();
                     const isMore = betTag.includes('more') || betTag.includes('over') || betTag.includes('↑');
 
                     // L5
-                    const last5 = playerLogs.slice(0, 5);
+                    const last5 = calcLogsAll.slice(0, 5);
                     let l5Avg = '-', l5Hit = '-';
                     if (last5.length > 0) {
                         let sum = 0, hits = 0;
@@ -2473,7 +2518,7 @@
                     }
 
                     // L20
-                    const last20 = playerLogs.slice(0, 20);
+                    const last20 = calcLogsAll.slice(0, 20);
                     let l20Avg = '-', l20Hit = '-';
                     if (last20.length > 0) {
                         let sum = 0, hits = 0;
@@ -2664,7 +2709,7 @@
                 if (gameOU) {
                     if (sport === 'mlb') {
                         const ou = parseFloat(gameOU);
-                        let ouClass = 'ou-yellow';
+                        let ouClass = 'ou-green';
                         if (ou >= 9.6) ouClass = 'ou-green';
                         else if (ou <= 8.4) ouClass = 'ou-red';
                         html += `<span>Game O/U: <strong class="${ouClass}">${gameOU}</strong></span>`;
@@ -3378,9 +3423,7 @@
                 let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
-                // For MLB pitcher props, pre-filter logs to ONLY actual pitching appearances (IP > 0).
-                // This ensures we show up to the last 30 real outings instead of limiting to ~30 calendar days
-                // (which previously included many DNP / non-pitching days for pitchers).
+                // FIX for pitcher Game Logs: use robust isPitchingAppearance filter for pitcher props
                 if (sport === 'mlb') {
                     const isPitcherPropForGameLog = (row['Stat Type'] || '').toLowerCase().includes('pitcher') ||
                         (row['Stat Type'] || '').toLowerCase().includes('ip') ||
@@ -3388,10 +3431,7 @@
                         (row['Stat Type'] || '').toLowerCase().includes('strikeout') ||
                         (row['Stat Type'] || '').toLowerCase().includes('hits allowed');
                     if (isPitcherPropForGameLog) {
-                        logs = logs.filter(log => {
-                            const ipNum = parseFloat(log.inningsPitched || log.IP || 0);
-                            return !isNaN(ipNum) && ipNum > 0;
-                        });
+                        logs = logs.filter(isPitchingAppearance);
                     }
                 }
 
@@ -3731,12 +3771,12 @@
                     // ========== EXACT MLB SPLITS LOGIC (copied and adapted from MLB code) ==========
                     let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
                     
-                    // MLB hitter/pitcher filter for accurate splits
+                    // FIX: Use robust isPitchingAppearance for Splits MLB pitcher props
                     const isHitter = !(row.Position || row.Pos || '').toUpperCase().includes('P') && !row['Stat Type'].toLowerCase().includes('pitcher');
                     if (isHitter) {
                         playerLogs = playerLogs.filter(log => parseFloat(log.atBats || log.AB || 0) > 0);
                     } else {
-                        playerLogs = playerLogs.filter(log => parseFloat(log.inningsPitched || log.IP || 0) > 0);
+                        playerLogs = playerLogs.filter(isPitchingAppearance);
                     }
                     
                     playerLogs.sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
