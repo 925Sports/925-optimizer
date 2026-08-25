@@ -1273,20 +1273,30 @@
                  */
                 function normalizeFootballRows(rawRows) {
                     return (rawRows || []).map(r => {
-                        const oddsRaw = (r['Headshot URL'] || r['Odds Type'] || 'standard').toString().trim().toLowerCase();
-                        const odds = ['standard','demon','goblin'].includes(oddsRaw) ? oddsRaw : 'standard';
-                        // If Headshot URL looks like a URL, keep it; otherwise take Data ID
+                        // Prefer an already-valid Odds Type (normalized CSV from GitHub workflow).
+                        // Raw Google Sheet has sport name in Odds Type and standard/demon/goblin in Headshot URL.
+                        const existingOdds = (r['Odds Type'] || '').toString().trim().toLowerCase();
+                        let odds;
+                        if (['standard', 'demon', 'goblin'].includes(existingOdds)) {
+                            odds = existingOdds;
+                        } else {
+                            const fromHeadshot = (r['Headshot URL'] || '').toString().trim().toLowerCase();
+                            odds = ['standard', 'demon', 'goblin'].includes(fromHeadshot) ? fromHeadshot : 'standard';
+                        }
+
+                        // Headshot: keep URL if present, else Data ID (raw sheet layout)
                         let headshot = (r['Headshot URL'] || '').toString().trim();
                         if (!headshot.startsWith('http')) {
                             headshot = (r['Data ID'] || '').toString().trim();
                         }
+
                         const edge = (r['Edge %'] || r['% Edge'] || '').toString().trim();
                         return {
                             ...r,
                             'Odds Type': odds,
                             'Headshot URL': headshot,
                             'Edge %': edge,
-                            'Bet Tag': (r['Bet Tag'] || '').toString().trim(), // Over / Under — tool accepts both
+                            'Bet Tag': (r['Bet Tag'] || '').toString().trim(),
                             Team: r.Team || r.team || '',
                             'Game Short Title': r['Game Short Title'] || r.Game || '',
                             Fav: r.Fav || '',
@@ -1763,9 +1773,10 @@
                     });
                 }
 
-                // Odds type
+                // Odds type (case-insensitive)
                 if (store.currentOddsType !== 'all') {
-                    filtered = filtered.filter(row => (row['Odds Type'] || 'standard') === store.currentOddsType);
+                    const want = (store.currentOddsType || 'standard').toLowerCase();
+                    filtered = filtered.filter(row => (row['Odds Type'] || 'standard').toLowerCase() === want);
                 }
 
                 // Search
@@ -1800,16 +1811,21 @@
                         return gameOk && teamOk && calloutOk;
                     });
                 } else {
-                    // Normal strict filtering for other sports
+                    // Strict when the sport has game/team data; lenient when lists are empty
+                    // (NFL/CFB CSVs currently have no Team / Game Short Title columns)
+                    const gamesFull = !store.uniqueGames || store.uniqueGames.length === 0 || store.selectedGames.size >= store.uniqueGames.length;
+                    const teamsFull = !store.uniqueTeams || store.uniqueTeams.length === 0 || store.selectedTeams.size >= store.uniqueTeams.length;
+                    const calloutsFull = !store.uniqueCallouts || store.uniqueCallouts.length === 0 || store.selectedCallouts.size >= store.uniqueCallouts.length;
+
                     filtered = filtered.filter(row => {
                         const gameTitle = row['Game Short Title'] || row.Game || '';
-                        const gameOk = store.selectedGames.has(gameTitle);
+                        const gameOk = gamesFull || !gameTitle || store.selectedGames.has(gameTitle);
 
                         const team = row.Team || '';
-                        const teamOk = store.selectedTeams.has(team);
+                        const teamOk = teamsFull || !team || store.selectedTeams.has(team);
 
                         const callout = (row['Callout Bet Tag'] || '').trim();
-                        const calloutOk = !callout || store.selectedCallouts.has(callout);
+                        const calloutOk = calloutsFull || !callout || store.selectedCallouts.has(callout);
 
                         return gameOk && teamOk && calloutOk;
                     });
