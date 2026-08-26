@@ -1290,7 +1290,19 @@
                             headshot = (r['Data ID'] || '').toString().trim();
                         }
 
-                        const edge = (r['Edge %'] || r['% Edge'] || '').toString().trim();
+                        // For NFL/CFB: use Max No-Vig % as the primary Edge metric for all stats
+                        // EXCEPT Fantasy Score (which continues to use the calculated % Edge).
+                        // This gives a cleaner true-probability ranking for ranking/sorting/display.
+                        const statTypeLower = (r['Stat Type'] || '').toString().toLowerCase().trim();
+                        const isFantasyScore = statTypeLower.includes('fantasy score') || statTypeLower === 'fantasy' || statTypeLower.includes('fpts');
+                        let edge;
+                        if (isFantasyScore) {
+                            edge = (r['Edge %'] || r['% Edge'] || '').toString().trim();
+                        } else {
+                            // Prefer Max No-Vig %; fall back to % Edge / Edge % if missing
+                            edge = (r['Max No-Vig %'] || r['Max No-Vig Diff'] || r['Edge %'] || r['% Edge'] || '').toString().trim();
+                        }
+
                         return {
                             ...r,
                             'Odds Type': odds,
