@@ -1241,8 +1241,9 @@
         function marketTruePoint(r) {
             if (!r) return null;
             const keys = [
-                'True Point', 'True Point Average Line', 'True Average Line', 'True Avg Line',
-                'Average Line', 'Avg Line', 'Projection'
+                'Average Line', 'Avg Line',
+                'True Point Average Line', 'True Average Line', 'True Avg Line',
+                'True Point', 'Projection'
             ];
             for (const key of keys) {
                 if (r[key] == null || String(r[key]).trim() === '') continue;
@@ -1388,7 +1389,12 @@
                 // UD is half-PPR, PP is full-PPR. Use sportsbook True Point for Receptions
                 // (not PP/UD rec lines): strip 0.5*REC from the UD line, add 1.0*REC.
                 // Example: UD 21, REC True Point 10 → 21 - 5 + 10 = 26.
-                let rec = findSiblingReceptionsTruePoint(row, sport);
+                let rec = row._recTruePoint;
+                if (rec == null) {
+                    const player = normalizeName(row['Player Name'] || '');
+                    rec = footballLookups(sport).rec.get(player);
+                }
+                if (rec == null) rec = findSiblingReceptionsTruePoint(row, sport);
                 if (rec == null) {
                     const pos = (row.Position || row.Pos || '').toUpperCase();
                     if (pos.includes('QB')) rec = 0;
@@ -1751,6 +1757,13 @@
                 } catch(e){}
 
                 // Initial render
+                await Promise.all([
+                    loadUnderdogOverlay('nfl'),
+                    loadUnderdogOverlay('cfb')
+                ]);
+                applyFootballFantasyAdjustments('nfl');
+                applyFootballFantasyAdjustments('cfb');
+
                 currentSport = 'all';
                 updateSportTabs();
                 initCurrentSport();
@@ -1767,6 +1780,257 @@
                 console.error(err);
                 contentDiv.innerHTML = '<div class="loading" style="color:#ef4444;">Error loading data.<br>Check the browser console (F12) for details and make sure your CSV files are correctly placed in the data/ folder.</div>';
             }
+        }
+
+        function parseLooseLineNumber(val) {
+            if (val == null) return null;
+            const s = String(val).trim();
+            if (!s) return null;
+            const ud = s.match(/ud\s*[:#-]?\s*(\d+(?:\.\d+)?)/i);
+            if (ud) {
+                const n = parseFloat(ud[1]);
+                return (!isNaN(n) && n > 0.3) ? n : null;
+            }
+            const n = parseFloat(s.replace(/[^0-9.\-]/g, ''));
+            if (isNaN(n) || n <= 0.3) return null;
+            return n;
+        }
+
+        function footballLookups(sport) {
+            const store = dataStore[sport];
+            if (!store) return { rec: new Map(), ud: new Map() };
+            if (!store._recByPlayer) store._recByPlayer = new Map();
+            if (!store._udFantasyByPlayer) store._udFantasyByPlayer = new Map();
+            return { rec: store._recByPlayer, ud: store._udFantasyByPlayer };
+        }
+
+        function indexFootballSheetLookups(sport) {
+            const store = dataStore[sport];
+            if (!store || !store.allData) return;
+            const { rec, ud } = footballLookups(sport);
+            rec.clear();
+            store.allData.forEach(row => {
+                const player = normalizeName(row['Player Name'] || '');
+                if (!player) return;
+                if (isReceptionsStatType(row['Stat Type'])) {
+                    const avg = marketTruePoint(row);
+                    if (avg != null) {
+                        const prev = rec.get(player);
+                        if (prev == null || avg > 0) rec.set(player, avg);
+                    }
+                }
+                const rawUd = extractUnderdogValueFromRow(row);
+                if (rawUd != null && isFantasyStat(row['Stat Type'])) {
+                    ud.set(player, rawUd);
+                }
+            });
+        }
+
+        function extractUnderdogValueFromRow(row) {
+            if (!row) return null;
+            if (row._udLineRaw != null && !isNaN(row._udLineRaw)) return row._udLineRaw;
+            const preferred = [
+                'Underdog Line', 'UnderdogLine', 'UD Line', 'ud_line', 'Underdog_Line',
+                'UD Fantasy Line', 'Underdog Fantasy', 'Underdog Fantasy Line', 'UD'
+            ];
+            for (const key of preferred) {
+                if (row[key] == null) continue;
+                const n = parseLooseLineNumber(row[key]);
+                if (n != null) return n;
+            }
+            // Scan every field for "UD 18.95" style values (shifted football sheets)
+            for (const key of Object.keys(row)) {
+                if (/^_/.test(key)) continue;
+                const val = row[key];
+                if (val == null) continue;
+                const s = String(val);
+                if (/ud\s*[:#-]?\s*\d/i.test(s)) {
+                    const n = parseLooseLineNumber(s);
+                    if (n != null) return n;
+                }
+            }
+            return null;
+        }
+
+        async function loadUnderdogOverlay(sport) {
+            const store = dataStore[sport];
+            if (!store) return;
+            const urls = [
+                `./data/underdog-${sport}.csv`,
+                `./data/underdog-${sport.toUpperCase()}.csv`,
+                `https://raw.githubusercontent.com/925Sports/925-optimizer/main/data/underdog-${sport}.csv`,
+                `https://raw.githubusercontent.com/925Sports/prop-data/main/underdog-${sport}.csv`
+            ];
+            let text = '';
+            for (const url of urls) {
+                try {
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        text = await res.text();
+                        if (text && text.length > 20) break;
+                    }
+                } catch (e) { /* optional overlay */ }
+            }
+            if (!text) return;
+            const parsed = Papa.parse(text, { header: true, skipEmptyLines: true }).data || [];
+            const { ud } = footballLookups(sport);
+            parsed.forEach(r => {
+                const name = r['Player Name'] || r.Player || r.Name || r.player || r.description || '';
+                const stat = (r['Stat Type'] || r.Stat || r.Market || r.stat || r.title || '').toLowerCase();
+                const looksFantasy = !stat || stat.includes('fantasy') || stat.includes('fpts') || stat.includes('pts');
+                if (!looksFantasy && stat && !isFantasyStat(stat)) return;
+                if (stat && !stat.includes('fantasy') && !stat.includes('fpts') && stat.includes('yard')) return;
+                const line = parseLooseLineNumber(
+                    r['Underdog Line'] || r.Line || r['Line Score'] || r.point || r.Point || r['Over/Under'] || r.Projection
+                );
+                const player = normalizeName(name);
+                if (player && line != null) ud.set(player, line);
+            });
+            console.log(`Underdog overlay for ${sport}: ${ud.size} players`);
+        }
+
+        function applyFootballFantasyAdjustments(sport) {
+            if (sport !== 'nfl' && sport !== 'cfb') return;
+            const store = dataStore[sport];
+            if (!store || !store.allData) return;
+            indexFootballSheetLookups(sport);
+            const { rec, ud } = footballLookups(sport);
+            store.allData.forEach(row => {
+                const player = normalizeName(row['Player Name'] || '');
+                if (!player) return;
+                const recAvg = rec.get(player);
+                if (recAvg != null) row._recTruePoint = recAvg;
+                if (!isFantasyStat(row['Stat Type'])) return;
+                let rawUd = extractUnderdogValueFromRow(row);
+                if (rawUd == null) rawUd = ud.get(player);
+                if (rawUd == null) return;
+                row._udLineRaw = rawUd;
+                row['Underdog Line'] = rawUd;
+                const recUsed = recAvg != null ? recAvg : null;
+                let recVal = recUsed;
+                if (recVal == null) {
+                    const pos = (row.Position || row.Pos || '').toUpperCase();
+                    recVal = pos.includes('QB') ? 0 : pos.includes('RB') ? 3 : pos.includes('TE') ? 4 : pos.includes('WR') ? 5 : 3;
+                }
+                const adjusted = rawUd - (0.5 * recVal) + (1.0 * recVal);
+                row._udLineAdjusted = adjusted;
+                row['Adjusted Underdog Line'] = adjusted;
+            });
+        }
+
+
+        function isIntegerLineValue(line) {
+            if (line == null || isNaN(line)) return false;
+            return Math.abs(line - Math.round(line)) < 1e-8 && line >= 0;
+        }
+
+        function isCountStatType(statType) {
+            const s = (statType || '').toLowerCase();
+            if (!s) return false;
+            if (/yard|yds|fantasy|longest|minutes|snap|distance/.test(s)) return false;
+            return /td|touchdown|reception|target|catch|sack|int|interception|attempt|completion|carry|rush att|pass att|goal|shot|save|hit|strikeout|steal|block|rebound|assist|three|3-pt|3pt|double|homer|home run|walk|stolen|combo|rbi|run(?!s allowed)|hits|base|pitch/.test(s)
+                || /^(pts|points|reb|ast|stl|blk|to|turnovers|k|so|ip|er)$/.test(s.trim());
+        }
+
+        function logFact(n) {
+            n = Math.round(n);
+            if (n < 2) return 0;
+            let s = 0;
+            for (let i = 2; i <= n; i++) s += Math.log(i);
+            return s;
+        }
+
+        function poissonPmf(k, lambda) {
+            if (lambda <= 0) return k === 0 ? 1 : 0;
+            k = Math.round(k);
+            if (k < 0) return 0;
+            return Math.exp(-lambda + k * Math.log(lambda) - logFact(k));
+        }
+
+        function poissonCdf(k, lambda) {
+            k = Math.floor(k);
+            if (k < 0) return 0;
+            let s = 0;
+            const cap = Math.min(k, Math.ceil(lambda + 12 * Math.sqrt(Math.max(lambda, 1))));
+            for (let i = 0; i <= k; i++) {
+                s += poissonPmf(i, lambda);
+                if (s >= 0.999999) return 1;
+            }
+            return Math.min(1, s);
+        }
+
+        function poissonPGreaterThan(threshold, lambda) {
+            return Math.max(0, 1 - poissonCdf(Math.floor(threshold), lambda));
+        }
+
+        function poissonPLessThan(threshold, lambda) {
+            return Math.max(0, poissonCdf(Math.floor(threshold) - 1, lambda));
+        }
+
+        function fitPoissonLambda(threshold, pOver, seed) {
+            const target = Math.min(0.99, Math.max(0.01, pOver));
+            let lo = 0.02;
+            let hi = Math.max((seed || 1) * 6, (threshold || 1) * 6, 10);
+            for (let i = 0; i < 28; i++) {
+                const mid = (lo + hi) / 2;
+                if (poissonPGreaterThan(threshold, mid) > target) hi = mid;
+                else lo = mid;
+            }
+            return (lo + hi) / 2;
+        }
+
+        /**
+         * Whole-number PrizePicks lines push at exactly the number.
+         * Sheet no-vig % is usually P(X >= L) from the X.5 book line (e.g. 63.6% = 2+ TDs),
+         * not P(X > L) which is what "Over 2" actually needs (3+).
+         */
+        function adjustIntegerLinePushProbabilities(sport) {
+            const store = dataStore[sport];
+            if (!store || !store.allData) return;
+            store.allData.forEach(row => {
+                if (row._pushAdjusted) return;
+                const line = parseFloat(row['Line Score'] || row.Line);
+                if (!isIntegerLineValue(line)) return;
+                if (!isCountStatType(row['Stat Type'])) return;
+
+                const rawOver = parseFloat(
+                    row['Average No-Vig Over %'] || row['No-Vig Over %'] || row['Max No-Vig %'] || row['Edge %'] || row['% Edge']
+                );
+                if (!isFinite(rawOver) || rawOver <= 1) return;
+
+                const pListedOver = rawOver > 1.5 ? rawOver / 100 : rawOver;
+                if (pListedOver < 0.02 || pListedOver > 0.98) return;
+
+                const avgLine = parseFloat(row['Average Line'] || row['True Point'] || row.Projection);
+                const truePt = parseFloat(row['True Point'] || row.Projection || row['Average Line'] || line);
+                const marketThreshold = isFinite(avgLine) && avgLine > 0 ? avgLine : Math.max(line - 0.5, 0);
+                const seed = isFinite(truePt) && truePt > 0 ? truePt : Math.max(line, 0.8);
+
+                const lambda = fitPoissonLambda(marketThreshold, pListedOver, seed);
+                const pOver = poissonPGreaterThan(line, lambda);
+                const pUnder = poissonPLessThan(line, lambda);
+                const pPush = Math.max(0, 1 - pOver - pUnder);
+
+                if (!isFinite(pOver) || !isFinite(pUnder)) return;
+
+                row._rawNoVigOver = pListedOver * 100;
+                row._pushProb = pPush * 100;
+                row._trueOverPct = pOver * 100;
+                row._trueUnderPct = pUnder * 100;
+                row._pushAdjusted = true;
+
+                row['Average No-Vig Over %'] = (pOver * 100).toFixed(2);
+                row['Average No-Vig Under %'] = (pUnder * 100).toFixed(2);
+
+                const useOver = pOver >= pUnder;
+                const hit = useOver ? pOver : pUnder;
+                row['Bet Tag'] = useOver ? 'Over' : 'Under';
+                const isFantasy = isFantasyStat(row['Stat Type']);
+                if (!isFantasy) {
+                    row['Edge %'] = (hit * 100).toFixed(2);
+                    row['Max No-Vig %'] = (hit * 100).toFixed(2);
+                }
+            });
         }
 
         function prepareSportData(sport) {
@@ -1832,6 +2096,7 @@
             });
             store.allData = deduped;
             data = store.allData;
+            adjustIntegerLinePushProbabilities(sport);
 
             // Unique values (canonicalized)
             store.uniqueGames = [...new Set(data.map(r => r['Game Short Title'] || r.Game || '').filter(Boolean))].sort();
@@ -1865,6 +2130,9 @@
             data.forEach(row => {
                 row._sport = sport;
             });
+            if (sport === 'nfl' || sport === 'cfb') {
+                indexFootballSheetLookups(sport);
+            }
         }
 
         // On-demand game log loader (key for fast initial load)
@@ -2837,6 +3105,7 @@
                 <div class="name">${playerName}</div>
                 <div class="game">${gameTitle}</div>
                 <div class="stat">${lineVal} ${statType}</div>
+                ${(isFantasyStat(statType) && (sport === 'nfl' || sport === 'cfb') && getUnderdogLine(row) != null) ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px;">UD ${Number(row._udLineRaw != null ? row._udLineRaw : getRawUnderdogLine(row)).toFixed(2)} → PP ${Number(getUnderdogLine(row)).toFixed(1)}</div>` : ''}
                 <div class="buttons">
                     <button class="${lessClass}" data-choice="Less">↓ Less</button>
                     <div class="divider ${dividerClass}"></div>
@@ -4623,37 +4892,30 @@
          * This is more defensive, especially for MLB data quality issues.
          */
         function getRawUnderdogLine(row) {
-            const possibleKeys = [
-                'Underdog Line', 'UnderdogLine', 'UD Line', 'ud_line', 'Underdog_Line',
-                'Adjusted Underdog Line', 'PP Adjusted UD Line', 'UD Fantasy Line'
-            ];
-
-            let rawValue = '';
-            for (const key of possibleKeys) {
-                if (row.hasOwnProperty(key) && row[key] != null) {
-                    rawValue = String(row[key]).trim();
-                    if (rawValue !== '') break;
-                }
+            if (!row) return null;
+            if (row._udLineRaw != null && !isNaN(parseFloat(row._udLineRaw))) {
+                const cached = parseFloat(row._udLineRaw);
+                if (cached > 0.3) return cached;
             }
-
-            const missingIndicators = ['n/a', 'na', '-', '--', 'null', 'undefined', 'none', ''];
-            if (!rawValue || missingIndicators.includes(rawValue.toLowerCase())) {
-                return null;
+            const extracted = extractUnderdogValueFromRow(row);
+            if (extracted != null) return extracted;
+            const sport = row._sport || currentSport || '';
+            if (sport === 'nfl' || sport === 'cfb') {
+                const player = normalizeName(row['Player Name'] || '');
+                const mapped = footballLookups(sport).ud.get(player);
+                if (mapped != null) return mapped;
             }
-
-            const num = parseFloat(rawValue);
-            if (isNaN(num) || Math.abs(num) < 0.01) return null;
-
-            const statTypeLower = (row['Stat Type'] || '').toLowerCase();
-            if (statTypeLower.includes('fantasy score') && num <= 0.3) return null;
-            return num;
+            return null;
         }
 
         function getUnderdogLine(row) {
-            let num = getRawUnderdogLine(row);
             const sport = row._sport || currentSport || '';
+            if (isFantasyStat(row['Stat Type']) && row._udLineAdjusted != null && !isNaN(parseFloat(row._udLineAdjusted))) {
+                return parseFloat(row._udLineAdjusted);
+            }
 
-            // If this row has no UD column, try a sibling Fantasy Score / same-stat row
+            let num = getRawUnderdogLine(row);
+
             if (num == null && sport && sport !== 'all') {
                 const store = dataStore[sport];
                 const player = (row['Player Name'] || '').trim().toLowerCase();
@@ -4662,7 +4924,7 @@
                     for (const r of store.allData) {
                         if ((r['Player Name'] || '').trim().toLowerCase() !== player) continue;
                         if ((r['Stat Type'] || '').trim().toLowerCase() !== stat) continue;
-                        const sibling = getRawUnderdogLine(r);
+                        const sibling = extractUnderdogValueFromRow(r);
                         if (sibling != null) { num = sibling; break; }
                     }
                 }
@@ -4670,7 +4932,12 @@
 
             if (num == null) return null;
 
-            // On the PrizePicks tab, convert Underdog Fantasy Score lines onto PP scoring
+            if (isFantasyStat(row['Stat Type']) && (sport === 'nfl' || sport === 'cfb')) {
+                const adjusted = adjustUnderdogFantasyLine(num, row, sport);
+                row._udLineRaw = num;
+                row._udLineAdjusted = adjusted;
+                return adjusted;
+            }
             if (isFantasyStat(row['Stat Type'])) {
                 const adjusted = adjustUnderdogFantasyLine(num, row, sport);
                 row._udLineRaw = num;
