@@ -392,24 +392,42 @@
         /* Sport-colored headshot ring (lighter shades) - replaces text badge */
         .headshot-wrapper {
             position: relative;
-            width: 82px;
-            height: 82px;
-            margin: 10px auto;
+            width: 86px;
+            height: 86px;
+            margin: 12px auto 8px;
             border-radius: 50%;
-            padding: 3px; /* creates the ring effect */
+            padding: 3px;
+            background: #1a1e26;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
         }
-        .headshot-wrapper.nba { background: rgba(124, 58, 237, 0.35); }   /* darker/more transparent purple */
-        .headshot-wrapper.wnba { background: rgba(249, 115, 22, 0.35); }  /* darker/more transparent orange */
-        .headshot-wrapper.mlb { background: rgba(34, 197, 94, 0.35); }   /* darker/more transparent green */
-        .headshot-wrapper.soccer { background: rgba(13, 148, 136, 0.35); } /* distinct teal for soccer */
-        .headshot-wrapper.nfl { background: rgba(1, 51, 105, 0.4); }     /* NFL navy */
-        .headshot-wrapper.cfb { background: rgba(139, 0, 0, 0.4); }      /* CFB crimson */
+        .headshot-wrapper::before {
+            content: "";
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            padding: 2px;
+            background: var(--ring, #444);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .headshot-wrapper.nba { --ring: linear-gradient(135deg, #a78bfa, #7c3aed); box-shadow: 0 0 0 1px rgba(124,58,237,0.25), 0 0 18px rgba(124,58,237,0.25); }
+        .headshot-wrapper.wnba { --ring: linear-gradient(135deg, #fdba74, #f97316); box-shadow: 0 0 0 1px rgba(249,115,22,0.25), 0 0 18px rgba(249,115,22,0.22); }
+        .headshot-wrapper.mlb { --ring: linear-gradient(135deg, #86efac, #22c55e); box-shadow: 0 0 0 1px rgba(34,197,94,0.25), 0 0 18px rgba(34,197,94,0.2); }
+        .headshot-wrapper.soccer { --ring: linear-gradient(135deg, #5eead4, #0d9488); box-shadow: 0 0 0 1px rgba(13,148,136,0.25), 0 0 18px rgba(13,148,136,0.22); }
+        .headshot-wrapper.nfl { --ring: linear-gradient(135deg, #60a5fa, #013369); box-shadow: 0 0 0 1px rgba(1,51,105,0.3), 0 0 18px rgba(1,51,105,0.25); }
+        .headshot-wrapper.cfb { --ring: linear-gradient(135deg, #f87171, #8B0000); box-shadow: 0 0 0 1px rgba(139,0,0,0.3), 0 0 18px rgba(139,0,0,0.22); }
 
         .headshot-wrapper .headshot {
             width: 100%;
             height: 100%;
             border: none;
             margin: 0;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #0f1218;
         }
 
         .loading { text-align: center; padding: 30px; font-size: 16px; color: var(--accent); }
@@ -808,8 +826,12 @@
         }
         .card:hover {
             transform: translateY(-3px);
-            box-shadow: 0 12px 28px rgba(0,0,0,0.45);
-            border-color: #3a4150;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(34,211,238,0.55), 0 12px 28px rgba(0,0,0,0.5);
+        }
+        .card.high-edge:hover {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 2px rgba(34,197,94,0.55), 0 12px 28px rgba(34,197,94,0.12);
         }
         .card.high-edge {
             border-color: rgba(34,197,94,0.45);
@@ -866,14 +888,15 @@
         .odds-pill {
             position: absolute;
             top: 12px;
-            right: 12px;
+            left: 12px;
             font-size: 10px;
             font-weight: 700;
-            padding: 2px 7px;
+            padding: 3px 8px;
             border-radius: 999px;
             background: #22262f;
             color: var(--muted);
             border: 1px solid var(--border);
+            letter-spacing: 0.02em;
         }
         .odds-pill.demon { background: rgba(168,85,247,0.15); color: #c084fc; border-color: rgba(168,85,247,0.3); }
         .odds-pill.goblin { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
@@ -977,6 +1000,67 @@
         #betslipPopup .betslips-container { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
         #betslipPopup th { background: #1a1e26; }
         #betslipPopup td { border-color: var(--border); }
+
+    
+        /* ===== Modern Table View ===== */
+        .table-view table {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .table-view th {
+            background: #1a1e26;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .table-view td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(42,47,58,0.6);
+            vertical-align: middle;
+        }
+        .table-view tr {
+            transition: background 0.12s, box-shadow 0.12s;
+        }
+        .table-view tr:hover {
+            background: rgba(34,211,238,0.06);
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        .table-view tr.high-edge-row {
+            box-shadow: inset 3px 0 0 rgba(34,197,94,0.6);
+        }
+        .table-view tr.high-edge-row:hover {
+            background: rgba(34,197,94,0.06);
+            box-shadow: inset 3px 0 0 #22c55e;
+        }
+        .table-player {
+            display: flex; align-items: center; gap: 10px;
+        }
+        .table-player img {
+            width: 32px; height: 32px; border-radius: 50%;
+            object-fit: cover; background: #0f1218;
+            box-shadow: 0 0 0 1px var(--border);
+        }
+        .table-player .pname { font-weight: 600; color: var(--text); }
+        .table-player .pmeta { font-size: 11px; color: var(--muted); }
+        .table-edge {
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .table-edge-bar {
+            width: 48px; height: 4px; background: #2a2f3a;
+            border-radius: 2px; overflow: hidden;
+        }
+        .table-edge-bar > span {
+            display: block; height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--high));
+        }
 
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -3182,12 +3266,11 @@
                         const tdPlayer = document.createElement('td');
                         tdPlayer.style.padding = '8px';
                         tdPlayer.innerHTML = `
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <img src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/28?text=?'}" 
-                                     style="width:28px;height:28px;border-radius:50%;border:1px solid #444;" alt="">
+                            <div class="table-player">
+                                <img src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/32?text=?'}" alt="">
                                 <div>
-                                    <div style="font-weight:600;color:#00ffcc;">${row['Player Name']}</div>
-                                    <div style="font-size:10px;color:#888;">${row.Team || ''} ${row.Position ? '• ' + row.Position : ''}</div>
+                                    <div class="pname">${row['Player Name']}</div>
+                                    <div class="pmeta">${row.Team || ''} ${row.Position ? '· ' + row.Position : ''}</div>
                                 </div>
                             </div>
                         `;
@@ -3202,14 +3285,18 @@
 
                         // Edge
                         const tdEdge = document.createElement('td');
-                        tdEdge.style.padding = '8px';
-                        tdEdge.style.fontWeight = '700';
-                        tdEdge.style.color = '#00ffcc';
-                        let icon = '';
+                        const edgeNum = parseFloat(row['Edge %'] || 0);
+                        const isHigh = edgeNum >= 54;
+                        if (isHigh) tr.classList.add('high-edge-row');
                         const ot = (row['Odds Type'] || '').toLowerCase();
-                        if (ot === 'demon') icon = '👿 ';
-                        if (ot === 'goblin') icon = '👺 ';
-                        tdEdge.textContent = icon + (parseFloat(row['Edge %'] || 0).toFixed(1) + '%');
+                        const otLabel = ot === 'demon' ? 'Demon' : (ot === 'goblin' ? 'Goblin' : '');
+                        tdEdge.innerHTML = `
+                            <div class="table-edge">
+                                <span class="edge-badge ${isHigh ? 'high' : ''}">${edgeNum.toFixed(1)}%</span>
+                                <span class="table-edge-bar"><span style="width:${Math.min(100, Math.max(8, edgeNum))}%"></span></span>
+                                ${otLabel ? `<span class="odds-pill ${ot}" style="position:static;font-size:9px;">${otLabel}</span>` : ''}
+                            </div>
+                        `;
                         tr.appendChild(tdEdge);
 
                         // Line
@@ -3626,7 +3713,7 @@
 
                     // Player + click to popup
                     const tdPlayer = document.createElement('td');
-                    tdPlayer.innerHTML = `<strong style="color:#00ffcc; cursor:pointer;">${row['Player Name']}</strong>`;
+                    tdPlayer.innerHTML = `<div class="table-player"><div><div class="pname" style="cursor:pointer;">${row['Player Name']}</div><div class="pmeta">${row.Team || ''}</div></div></div>`;
                     tdPlayer.setAttribute('data-label', 'Player');
                     tdPlayer.onclick = () => showPlayerPopup(row, idx, row._sport);
                     tr.appendChild(tdPlayer);
@@ -3646,7 +3733,8 @@
                     // Edge
                     const tdEdge = document.createElement('td');
                     const edgeVal = parseFloat(row['Edge %']) || 0;
-                    tdEdge.innerHTML = `<span style="color:#00ffcc; font-weight:600;">${edgeVal.toFixed(1)}%</span>`;
+                    if (edgeVal >= 54) tr.classList.add('high-edge-row');
+                    tdEdge.innerHTML = `<div class="table-edge"><span class="edge-badge ${edgeVal >= 54 ? 'high' : ''}">${edgeVal.toFixed(1)}%</span><span class="table-edge-bar"><span style="width:${Math.min(100, Math.max(8, edgeVal))}%"></span></span></div>`;
                     tdEdge.setAttribute('data-label', 'Edge');
                     tr.appendChild(tdEdge);
 
@@ -5486,7 +5574,11 @@
                         productProb *= prob;
                         comboPlayers.push(player);
                         playerdetails.push(bet);
-                        projectionEntries.push(`${bet.id || ''},${bet.projectionId || ''}-${direction}-${line}`);
+                        // PrizePicks deep link format: projectionId-o/u-line
+                        const projId = bet.projectionId || bet.id || '';
+                        if (projId) {
+                            projectionEntries.push(`${projId}-${direction}-${line}`);
+                        }
                         games.add(bet.game || 'Mixed');
                     }
                     if (valid) {
@@ -5496,7 +5588,7 @@
                         let payout = pickcount === 2 ? '3X' : pickcount === 3 ? '6X' : pickcount === 4 ? '10X' : pickcount === 5 ? '10X' : '25X';
                         let gameLabel = games.size === 1 ? Array.from(games)[0] : 'Mixed';
                         allCombinations[pickcount].push({
-                            sliplink: `https://prizepicks.onelink.me/gCQS/shareEntry?projections=${projectionEntries.join(',')}`,
+                            sliplink: `https://app.prizepicks.com/?projections=${projectionEntries.join(',')}`,
                             players: comboPlayers.join(' | '),
                             playerdetails,
                             edge: edge,
@@ -5548,11 +5640,24 @@
                 return;
             }
 
-            if (betsForSlips.length > 10) {
-                betsForSlips = [...betsForSlips]
-                    .sort((a, b) => (parseFloat(b.edge) || 0) - (parseFloat(a.edge) || 0))
-                    .slice(0, 10);
+            // Keep more legs so selected bets aren't dropped.
+            // Prefer unique players (PrizePicks won't accept the same player twice).
+            const sorted = [...betsForSlips].sort((a, b) => (parseFloat(b.edge) || 0) - (parseFloat(a.edge) || 0));
+            const unique = [];
+            const seenPlayers = new Set();
+            const droppedSamePlayer = [];
+            const droppedNoId = [];
+            for (const b of sorted) {
+                const pid = b.projectionId || b.id || '';
+                if (!pid) { droppedNoId.push(b); continue; }
+                const p = (b.player || '').toLowerCase();
+                if (seenPlayers.has(p)) { droppedSamePlayer.push(b); continue; }
+                seenPlayers.add(p);
+                unique.push(b);
+                if (unique.length >= 10) break;
             }
+            betsForSlips = unique;
+            window._slipDropped = { samePlayer: droppedSamePlayer, noId: droppedNoId };
 
             const combinations = generateCombinations(betsForSlips);
             let outputData = [];
@@ -5646,8 +5751,23 @@
 
             const legsUsed = betsForSlips.length;
             const totalSelected = selectedBets.length;
-            const note = (currentSport !== 'all' || (dataStore[currentSport] && dataStore[currentSport].selectedGames && dataStore[currentSport].selectedGames.size < (dataStore[currentSport].uniqueGames||[]).length)) ? ' (filtered)' : '';
+            const note = (currentSport !== 'all') ? ' (this sport only)' : '';
             document.getElementById('betSlipCount').textContent = `(${legsUsed}/${totalSelected} legs${note} • ${outputData.length} combos)`;
+
+            // Surface dropped bets so the user knows why some didn't make a slip
+            const dropped = window._slipDropped || { samePlayer: [], noId: [] };
+            let dropNote = '';
+            if (dropped.samePlayer.length) {
+                dropNote += `<div style="font-size:12px;color:#f59e0b;margin-top:8px;">Dropped (same player already used): ${dropped.samePlayer.map(b => b.player + ' ' + b.stat).join(', ')}</div>`;
+            }
+            if (dropped.noId.length) {
+                dropNote += `<div style="font-size:12px;color:#ef4444;margin-top:4px;">Dropped (missing projection ID): ${dropped.noId.map(b => b.player + ' ' + b.stat).join(', ')}</div>`;
+            }
+            if (dropNote) {
+                const noteEl = document.createElement('div');
+                noteEl.innerHTML = dropNote;
+                tbody.parentNode.parentNode.appendChild(noteEl);
+            }
         }
 
         function removeBet(index) {
