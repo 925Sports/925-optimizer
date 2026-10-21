@@ -2,15 +2,26 @@
 """
 Normalize NFL/CFB PrizePicks optimizer CSVs so columns match the multi-sport tool.
 
-Source Google Sheet columns are shifted:
-  - "Odds Type" column contains sport name (NFL/CFB)
-  - "Headshot URL" column contains standard/demon/goblin
-  - "Data ID" column contains the real headshot URL
-  - Edge lives in "% Edge" (tool expects "Edge %")
+Columns are now correctly aligned in the source Google Sheet:
+  - "Odds Type" contains standard / demon / goblin
+  - "Headshot URL" contains the real image URL
+  - Edge may be in "% Edge" or "Edge %"
 """
 import csv
 import sys
 from pathlib import Path
+
+VALID_ODDS = {"standard", "demon", "goblin"}
+
+def map_odds(raw: str) -> str:
+    """Map source odds / Prop Type labels to standard|demon|goblin."""
+    val = (raw or "").strip().lower()
+    if val in VALID_ODDS:
+        return val
+    # COMBO DATA Prop Type labels → treat as non-standard (demon)
+    if val in ("yes-no (synth under)", "non-standard", "yes-no", "synth under"):
+        return "demon"
+    return "standard"
 
 def normalize(in_path: Path, out_path: Path) -> int:
     with in_path.open(newline="", encoding="utf-8") as f:
@@ -22,12 +33,16 @@ def normalize(in_path: Path, out_path: Path) -> int:
 
     normalized = []
     for r in rows:
-        odds_raw = (r.get("Headshot URL") or r.get("Odds Type") or "standard").strip().lower()
-        odds = odds_raw if odds_raw in ("standard", "demon", "goblin") else "standard"
+        # Trust the Odds Type column first; fall back to Prop Type if present
+        odds = map_odds(r.get("Odds Type") or r.get("Prop Type") or "standard")
 
+        # Headshot is now in the correct column
         headshot = (r.get("Headshot URL") or "").strip()
         if not headshot.startswith("http"):
-            headshot = (r.get("Data ID") or "").strip()
+            # Fallback only if someone still has a URL in Data ID
+            alt = (r.get("Data ID") or "").strip()
+            if alt.startswith("http"):
+                headshot = alt
 
         edge = (r.get("Edge %") or r.get("% Edge") or "").strip()
 
@@ -68,12 +83,12 @@ def normalize(in_path: Path, out_path: Path) -> int:
             normalized.append(new_row)
 
     fieldnames = list(normalized[0].keys()) if normalized else [
-        "Date","Start Time","Player Name","Stat Type","Line Score","Odds Type",
-        "Headshot URL","Data ID","Over %","Under %","No-Vig Over %","No-Vig Under %",
-        "True Point","Average Line","Average Over %","Average Under %",
-        "Average No-Vig Over %","Average No-Vig Under %","Percent Difference",
-        "Max No-Vig %","Bet Tag","Projection","Projection vs Line","Edge %",
-        "Correlates","Team","Game Short Title","Fav","O/U","Callout Bet Tag","Position",
+        "Date", "Start Time", "Player Name", "Stat Type", "Line Score", "Odds Type",
+        "Headshot URL", "Data ID", "Over %", "Under %", "No-Vig Over %", "No-Vig Under %",
+        "True Point", "Average Line", "Average Over %", "Average Under %",
+        "Average No-Vig Over %", "Average No-Vig Under %", "Percent Difference",
+        "Max No-Vig %", "Bet Tag", "Projection", "Projection vs Line", "Edge %",
+        "Correlates", "Team", "Game Short Title", "Fav", "O/U", "Callout Bet Tag", "Position",
     ]
 
     with out_path.open("w", newline="", encoding="utf-8") as f:
