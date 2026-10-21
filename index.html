@@ -7,11 +7,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --accent: #00ffcc;
-            --accent-dark: #00e6b3;
-            --bg: #0a0a0a;
-            --card-bg: #1a1a1a;
-            --border: #333;
+            --accent: #22d3ee;
+            --accent-dark: #06b6d4;
+            --bg: #0b0d12;
+            --surface: #13161d;
+            --card-bg: #161a22;
+            --border: #2a2f3a;
+            --text: #e8ecf4;
+            --muted: #8b93a7;
+            --high: #22c55e;
+            --demon: #a855f7;
+            --goblin: #f59e0b;
         }
 
         html {
@@ -705,6 +711,269 @@
                 margin-top: 8px;
             }
         }
+    
+        /* ===== Modernized UI ===== */
+        body { background: var(--bg); color: var(--text); }
+
+        .title-header {
+            background: rgba(11,13,18,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            box-shadow: none;
+        }
+
+        .sport-tabs {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3px;
+        }
+        .sport-tab { color: var(--muted); font-weight: 500; }
+        .sport-tab.active {
+            background: #7c3aed;
+            color: #fff;
+            box-shadow: 0 0 0 1px rgba(124,58,237,0.5), 0 4px 12px rgba(124,58,237,0.25);
+        }
+
+        .controls {
+            background: rgba(11,13,18,0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            box-shadow: none;
+            gap: 10px;
+        }
+        #search {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 10px 14px;
+            width: 240px;
+        }
+        #search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,0.15); }
+
+        .filter-btn {
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        .filter-btn:hover { background: #1e232d; border-color: #3a4150; }
+
+        /* Segmented odds control */
+        .odds-seg {
+            display: flex;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .odds-seg button {
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
+        }
+        .odds-seg button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+        .odds-seg button.active { color: #000; background: var(--accent); }
+        .odds-seg button.active.demon { background: var(--demon); color: #fff; }
+        .odds-seg button.active.goblin { background: var(--goblin); color: #000; }
+        .odds-seg .count {
+            font-size: 10px;
+            opacity: 0.75;
+            font-weight: 700;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 14px 14px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+            transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+            border-color: #3a4150;
+        }
+        .card.high-edge {
+            border-color: rgba(34,197,94,0.45);
+            box-shadow: 0 0 0 1px rgba(34,197,94,0.25), 0 8px 24px rgba(34,197,94,0.08);
+        }
+        .card .name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+        .card .team { color: var(--muted); font-size: 12px; }
+        .card .game { color: #6b7280; font-size: 11.5px; }
+        .card .stat { font-size: 15px; font-weight: 600; color: #f3f4f6; margin: 6px 0 10px; }
+
+        .edge-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(34,211,238,0.12);
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 13px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(34,211,238,0.25);
+        }
+        .edge-badge.high { background: rgba(34,197,94,0.15); color: var(--high); border-color: rgba(34,197,94,0.3); }
+
+        .edge-bar {
+            height: 3px;
+            background: #2a2f3a;
+            border-radius: 2px;
+            margin: 6px auto 0;
+            width: 70%;
+            overflow: hidden;
+        }
+        .edge-bar > span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--high));
+            border-radius: 2px;
+        }
+
+        .card .buttons {
+            background: #0f1218;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+        .card .button {
+            font-weight: 600;
+            font-size: 13px;
+            padding: 10px 8px;
+        }
+        .card .button.selected-more { background: var(--high); color: #000; }
+        .card .button.selected-less { background: #ef4444; color: #fff; }
+
+        .odds-pill {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: #22262f;
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+        .odds-pill.demon { background: rgba(168,85,247,0.15); color: #c084fc; border-color: rgba(168,85,247,0.3); }
+        .odds-pill.goblin { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--muted);
+        }
+        .empty-state h3 { color: var(--text); margin: 0 0 6px; font-size: 18px; }
+        .empty-state p { margin: 0; font-size: 14px; }
+
+        .tabs { background: transparent; box-shadow: none; padding: 8px 24px; }
+        .tab {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+        .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+        @media (max-width: 768px) {
+            .odds-seg button { padding: 8px 10px; font-size: 12px; }
+            .card .button { padding: 12px 10px !important; }
+        }
+
+    
+        /* ===== Modern Popups ===== */
+        #overlay { background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); }
+        .popup {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+            padding: 18px 18px 16px;
+        }
+        .popup h3 { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: var(--text); }
+        .popup-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px;
+        }
+        .popup-close {
+            background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+            width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+            font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+        }
+        .popup-close:hover { color: var(--text); background: #1e232d; }
+        .popup-search {
+            width: 100%; padding: 8px 12px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text); font-size: 13px; margin-bottom: 10px;
+        }
+        .popup-search:focus { outline: none; border-color: var(--accent); }
+        .popup-list { max-height: 200px; overflow: auto; margin-bottom: 8px; }
+        .popup-list label {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 13px;
+        }
+        .popup-list label:hover { background: rgba(255,255,255,0.04); }
+        .popup-list input { accent-color: var(--accent); }
+        .popup-actions { display: flex; gap: 8px; margin-bottom: 10px; }
+        .select-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 12px;
+        }
+        #applyFilter, #applyCalloutFilter, #applyAdvancedFilter {
+            background: var(--accent); color: #000; border-radius: 10px; font-weight: 700;
+        }
+
+        /* Player popup */
+        #playerPopup {
+            background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+        }
+        #playerPopup .header {
+            background: linear-gradient(180deg, #161a22 0%, #12151c 100%);
+            border-bottom: 1px solid var(--border);
+            border-radius: 16px 16px 0 0;
+            padding: 14px 16px;
+        }
+        #popupName { font-size: 20px; font-weight: 700; }
+        #playerPopup .stat-box {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 6px 10px;
+        }
+        #playerPopup .stat-label { color: var(--muted); font-size: 10px; }
+        #playerPopup .stat-value { font-size: 14px; font-weight: 700; }
+        #closePlayerPopup {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: var(--muted);
+        }
+        #closePlayerPopup:hover { color: var(--text); }
+        #prevPlayer, #nextPlayer {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text);
+        }
+        #prevPlayer:hover, #nextPlayer:hover { background: #1e232d; }
+
+        /* Bet slip */
+        #betslipPopup .betslips-container { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+        #betslipPopup th { background: #1a1e26; }
+        #betslipPopup td { border-color: var(--border); }
+
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -759,7 +1028,7 @@
 
         <!-- RIGHT: Standard bets + How to use -->
         <div class="header-right">
-            <div id="standardBetsCount" style="background:#1f2937; color:#9ca3af; font-size:12px; padding:4px 12px; border-radius:9999px; white-space:nowrap;">
+            <div id="standardBetsCount" style="background:var(--surface); color:var(--muted); font-size:12px; padding:6px 12px; border-radius:999px; white-space:nowrap; border:1px solid var(--border);">
                 <span id="standardBetsNumber">0</span> Standard bets
             </div>
             <button onclick="showToolInfo()" 
@@ -781,10 +1050,15 @@
         </div>
 
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <select id="oddsSelect" style="padding:8px 12px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;font-size:13px;">
+            <div class="odds-seg" id="oddsSeg">
+                <button type="button" data-odds="standard" class="active">Standard</button>
+                <button type="button" data-odds="demon" class="demon">Demon</button>
+                <button type="button" data-odds="goblin" class="goblin">Goblin</button>
+            </div>
+            <select id="oddsSelect" style="display:none;">
                 <option value="standard" selected>Standard</option>
-                <option value="demon">Demon 👿</option>
-                <option value="goblin">Goblin 👺</option>
+                <option value="demon">Demon</option>
+                <option value="goblin">Goblin</option>
             </select>
 
             <select id="viewSelect" style="padding:8px 12px;border-radius:9999px;border:1px solid #333;background:#1a1a1a;color:#f0f0f0;font-size:13px;">
@@ -822,32 +1096,51 @@
 
     <!-- Filter Games/Teams -->
     <div id="popup" class="popup">
+        <div class="popup-header">
+            <h3>Filter Games / Teams</h3>
+            <button class="popup-close" onclick="document.getElementById('popup').style.display='none';document.getElementById('overlay').style.display='none';">×</button>
+        </div>
         <button id="applyFilter">Apply Filters</button>
-        <h3>Games</h3>
-        <button id="selectAllGames" class="select-btn">Select All</button>
-        <button id="deselectAllGames" class="select-btn">Deselect All</button>
-        <div id="gamesList" style="max-height:160px;overflow:auto;margin-bottom:12px;"></div>
+        <h3 style="margin-top:16px;">Games</h3>
+        <input id="gamesSearch" class="popup-search" placeholder="Search games...">
+        <div class="popup-actions">
+            <button id="selectAllGames" class="select-btn">Select All</button>
+            <button id="deselectAllGames" class="select-btn">Deselect All</button>
+        </div>
+        <div id="gamesList" class="popup-list"></div>
 
         <h3>Teams</h3>
-        <button id="selectAllTeams" class="select-btn">Select All</button>
-        <button id="deselectAllTeams" class="select-btn">Deselect All</button>
-        <div id="teamsList" style="max-height:160px;overflow:auto;"></div>
+        <input id="teamsSearch" class="popup-search" placeholder="Search teams...">
+        <div class="popup-actions">
+            <button id="selectAllTeams" class="select-btn">Select All</button>
+            <button id="deselectAllTeams" class="select-btn">Deselect All</button>
+        </div>
+        <div id="teamsList" class="popup-list"></div>
     </div>
 
     <!-- Callout Filter -->
     <div id="calloutPopup" class="popup">
+        <div class="popup-header">
+            <h3>Filter Callouts</h3>
+            <button class="popup-close" onclick="document.getElementById('calloutPopup').style.display='none';document.getElementById('overlay').style.display='none';">×</button>
+        </div>
         <button id="applyCalloutFilter">Apply</button>
-        <h3>Callout Bet Tags</h3>
-        <button id="selectAllCallouts" class="select-btn">Select All</button>
-        <button id="deselectAllCallouts" class="select-btn">Deselect All</button>
-        <div id="calloutsList" style="max-height:220px;overflow:auto;"></div>
+        <div class="popup-actions" style="margin-top:12px;">
+            <button id="selectAllCallouts" class="select-btn">Select All</button>
+            <button id="deselectAllCallouts" class="select-btn">Deselect All</button>
+        </div>
+        <div id="calloutsList" class="popup-list" style="max-height:280px;"></div>
     </div>
 
     <!-- Advanced Filter -->
     <div id="advancedFilterPopup" class="popup">
+        <div class="popup-header">
+            <h3>Advanced Filters</h3>
+            <button class="popup-close" onclick="document.getElementById('advancedFilterPopup').style.display='none';document.getElementById('overlay').style.display='none';">×</button>
+        </div>
         <button id="applyAdvancedFilter">Apply</button>
         
-        <h3>Bet Tag (More / Less)</h3>
+        <h3 style="margin-top:16px;">Bet Tag (More / Less)</h3>
         <button id="selectAllBetTags" class="select-btn">Select All</button>
         <button id="deselectAllBetTags" class="select-btn">Deselect All</button>
         <div id="betTagsList" style="max-height:120px;overflow:auto;margin-bottom:10px;"></div>
@@ -870,9 +1163,9 @@
 
     <!-- Bet Slip -->
     <div id="betslipPopup" class="popup">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <h3 style="margin:0;">Generated Bet Slips <span id="betSlipCount" style="color:#888;font-size:14px;"></span></h3>
-            <button id="closeBetSlip" style="margin:0;" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">Close</button>
+        <div class="popup-header">
+            <h3 style="margin:0;">Bet Slips <span id="betSlipCount" style="color:var(--muted);font-size:13px;font-weight:500;"></span></h3>
+            <button class="popup-close" id="closeBetSlip" onclick="document.getElementById('betslipPopup').style.display='none'; document.getElementById('overlay').style.display='none';">×</button>
         </div>
         
         <div class="payout-filter-container" style="margin:12px 0 8px;display:flex;align-items:center;gap:8px;">
@@ -2209,7 +2502,7 @@
                 if (advBtn) advBtn.style.display = '';
                 const store = dataStore[currentSport];
                 if (!store || !store.allData.length) {
-                    contentDiv.innerHTML = `<div class="loading">No ${currentSport.toUpperCase()} data loaded.</div>`;
+                    contentDiv.innerHTML = `<div class="empty-state"><h3>No ${currentSport.toUpperCase()} data</h3><p>Check that the CSV is available or refresh the page.</p></div>`;
                     return;
                 }
 
@@ -2237,6 +2530,11 @@
                 searchInput.value = store.searchTerm || '';
                 viewSelect.value = store.currentView;
                 selectedToggle.checked = store.showSelectedOnly;
+                // Sync odds segmented control
+                if (oddsSelect) oddsSelect.value = store.currentOddsType || 'standard';
+                document.querySelectorAll('#oddsSeg button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.odds === (store.currentOddsType || 'standard'));
+                });
 
                 // Rebuild stat type tabs
                 buildStatTabs();
@@ -2433,17 +2731,25 @@
                 }
             };
 
-            // Odds type select (dropdown only now)
-            oddsSelect.onchange = () => {
+            // Odds type: segmented control + hidden select
+            function setOddsType(val) {
+                oddsSelect.value = val;
+                document.querySelectorAll('#oddsSeg button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.odds === val);
+                });
                 if (currentSport === 'all') {
                     renderAllView();
                     updateAllTabHeaderInfo();
                     updateStandardBetsCount();
                 } else {
-                    dataStore[currentSport].currentOddsType = oddsSelect.value;
+                    dataStore[currentSport].currentOddsType = val;
                     renderContent();
                 }
-            };
+            }
+            oddsSelect.onchange = () => setOddsType(oddsSelect.value);
+            document.querySelectorAll('#oddsSeg button').forEach(btn => {
+                btn.onclick = () => setOddsType(btn.dataset.odds);
+            });
 
             // Filter buttons
             document.getElementById('filterBtn').onclick = () => showFilterPopup();
@@ -2650,7 +2956,7 @@
                 contentDiv.className = store.currentView === 'table' ? 'table-view' : '';
 
                 if (filtered.length === 0) {
-                    contentDiv.innerHTML = '<div class="loading">No data available for this selection.</div>';
+                    contentDiv.innerHTML = `<div class="empty-state"><h3>No props match</h3><p>Try a different odds type, clear filters, or switch sports.</p></div>`;
                     return;
                 }
 
@@ -3094,17 +3400,23 @@
             const betTagLower = betTag.toLowerCase();
             const dividerClass = betTagLower.includes('more') || betTagLower.includes('over') ? 'more' : (betTagLower.includes('less') || betTagLower.includes('under') ? 'less' : '');
 
+            const edgeNum = parseFloat(row['Edge %'] || 0);
+            const isHigh = edgeNum >= 54;
+            if (isHigh) card.classList.add('high-edge');
+            const edgeBarWidth = Math.min(100, Math.max(8, edgeNum));
+            const oddsLabel = oddsType === 'demon' ? 'Demon' : (oddsType === 'goblin' ? 'Goblin' : 'Standard');
+
             card.innerHTML = `
-                ${iconHTML}
-                <div class="header">
-                    <span class="pop">${edge}</span>
+                <div class="odds-pill ${oddsType}">${oddsLabel}</div>
+                <div class="header" style="justify-content:center;">
+                    <span class="edge-badge ${isHigh ? 'high' : ''}">${edge}</span>
                 </div>
+                <div class="edge-bar"><span style="width:${edgeBarWidth}%"></span></div>
                 <div class="headshot-wrapper ${headshotRingClass}">
                     <img class="headshot" src="${row['Headshot URL'] || row['Player Image'] || 'https://via.placeholder.com/78?text=?'}" alt="${playerName}">
                 </div>
-                <div class="team">${team}</div>
                 <div class="name">${playerName}</div>
-                <div class="game">${gameTitle}</div>
+                <div class="team">${team}${gameTitle ? ' · ' + gameTitle : ''}</div>
                 <div class="stat">${lineVal} ${statType}</div>
                 ${(isFantasyStat(statType) && (sport === 'nfl' || sport === 'cfb') && getUnderdogLine(row) != null) ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px;">UD ${Number(row._udLineRaw != null ? row._udLineRaw : getRawUnderdogLine(row)).toFixed(2)} → PP ${Number(getUnderdogLine(row)).toFixed(1)}</div>` : ''}
                 <div class="buttons">
@@ -3557,14 +3869,17 @@
                 betTagHTML = `<span style="font-size:12px; background:${bgColor}; color:#000; padding:2px 8px; border-radius:6px; font-weight:600;">${betTag}</span>`;
             }
 
+            const edgeNum = parseFloat(edgeVal);
+            const edgeClass = edgeNum >= 54 ? 'high' : '';
             document.getElementById('popupName').innerHTML = `
-                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-                    <span>${row['Player Name']}</span>
-                    <span style="font-size:13px; color:#888;">${sport.toUpperCase()}</span>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span style="font-size:20px;font-weight:700;">${row['Player Name']}</span>
+                    <span style="font-size:11px; color:var(--muted); background:var(--surface); padding:2px 8px; border-radius:999px; border:1px solid var(--border);">${sport.toUpperCase()}</span>
                     ${betTagHTML}
+                    <span class="edge-badge ${edgeClass}">${edgeVal}%</span>
                 </div>
-                <div style="font-size:13px; color:#aaa; margin-top:4px;">
-                    ${statType} &nbsp;•&nbsp; Line: <strong>${lineVal}</strong> &nbsp;•&nbsp; Edge: <strong style="color:#00ffcc">${edgeVal}%</strong>
+                <div style="font-size:13px; color:var(--muted); margin-top:6px;">
+                    ${statType} · Line <strong style="color:var(--text);">${lineVal}</strong>
                 </div>
             `;
 
@@ -4964,7 +5279,6 @@
             gamesList.innerHTML = '';
             store.uniqueGames.forEach(game => {
                 const div = document.createElement('div');
-                div.style.cssText = 'margin:3px 0;font-size:13px;';
                 div.innerHTML = `<label><input type="checkbox" ${store.selectedGames.has(game) ? 'checked' : ''} value="${game}"> ${game}</label>`;
                 gamesList.appendChild(div);
             });
@@ -4973,10 +5287,31 @@
             teamsList.innerHTML = '';
             store.uniqueTeams.forEach(team => {
                 const div = document.createElement('div');
-                div.style.cssText = 'margin:3px 0;font-size:13px;';
                 div.innerHTML = `<label><input type="checkbox" ${store.selectedTeams.has(team) ? 'checked' : ''} value="${team}"> ${team}</label>`;
                 teamsList.appendChild(div);
             });
+
+            // Search filters
+            const gamesSearch = document.getElementById('gamesSearch');
+            const teamsSearch = document.getElementById('teamsSearch');
+            if (gamesSearch) {
+                gamesSearch.value = '';
+                gamesSearch.oninput = () => {
+                    const q = gamesSearch.value.toLowerCase();
+                    gamesList.querySelectorAll('div').forEach(d => {
+                        d.style.display = d.textContent.toLowerCase().includes(q) ? '' : 'none';
+                    });
+                };
+            }
+            if (teamsSearch) {
+                teamsSearch.value = '';
+                teamsSearch.oninput = () => {
+                    const q = teamsSearch.value.toLowerCase();
+                    teamsList.querySelectorAll('div').forEach(d => {
+                        d.style.display = d.textContent.toLowerCase().includes(q) ? '' : 'none';
+                    });
+                };
+            }
 
             document.getElementById('applyFilter').onclick = () => {
                 store.selectedGames = new Set(Array.from(gamesList.querySelectorAll('input:checked')).map(i => i.value));
@@ -5007,7 +5342,7 @@
             list.innerHTML = '';
             store.uniqueCallouts.forEach(c => {
                 const div = document.createElement('div');
-                div.innerHTML = `<label style="display:block;margin:4px 0;font-size:13px;"><input type="checkbox" ${store.selectedCallouts.has(c) ? 'checked' : ''} value="${c}"> ${c || '(none)'}</label>`;
+                div.innerHTML = `<label><input type="checkbox" ${store.selectedCallouts.has(c) ? 'checked' : ''} value="${c}"> ${c || '(none)'}</label>`;
                 list.appendChild(div);
             });
 
