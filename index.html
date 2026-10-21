@@ -1606,8 +1606,9 @@
             // MLB is using GitHub raw (as currently in play).
             const urls = {
                 nba: { 
-                    pp: './data/prizepicks-nba.csv', 
-                    logs: './data/nba_game_logs.csv'   // Local first (recommended). Change to your Google Sheets published CSV if preferred.
+                    pp: './data/prizepicks-nba.csv',
+                    ppRemote: 'https://raw.githubusercontent.com/925Sports/prop-data/main/prizepicks-nba.csv',
+                    logs: './data/nba_game_logs.csv'
                 },
                 wnba: { 
                     pp: './data/prizepicks-wnba.csv', 
@@ -1663,42 +1664,42 @@
                 }
 
                 /**
-                 * NFL/CFB Google Sheet columns are shifted vs NBA/WNBA/MLB:
-                 *   "Odds Type" column contains the sport name (NFL/CFB)
-                 *   "Headshot URL" column contains standard/demon/goblin
-                 *   "Data ID" column contains the real headshot URL
-                 *   "% Edge" is used instead of "Edge %"
-                 * This normalizer maps them into the schema the rest of the tool expects.
+                 * NFL/CFB normalizer.
+                 * Source sheets now have correct columns:
+                 *   Odds Type = standard / demon / goblin
+                 *   Headshot URL = real image URL
+                 * Still maps COMBO DATA Prop Type labels and prefers Max No-Vig % for edge.
                  */
                 function normalizeFootballRows(rawRows) {
-                    return (rawRows || []).map(r => {
-                        // Prefer an already-valid Odds Type (normalized CSV from GitHub workflow).
-                        // Raw Google Sheet has sport name in Odds Type and standard/demon/goblin in Headshot URL.
-                        const existingOdds = (r['Odds Type'] || '').toString().trim().toLowerCase();
-                        let odds;
-                        if (['standard', 'demon', 'goblin'].includes(existingOdds)) {
-                            odds = existingOdds;
-                        } else {
-                            const fromHeadshot = (r['Headshot URL'] || '').toString().trim().toLowerCase();
-                            odds = ['standard', 'demon', 'goblin'].includes(fromHeadshot) ? fromHeadshot : 'standard';
+                    const VALID = ['standard', 'demon', 'goblin'];
+                    const mapOdds = (raw) => {
+                        const val = (raw || '').toString().trim().toLowerCase();
+                        if (VALID.includes(val)) return val;
+                        // COMBO DATA Prop Type labels → non-standard
+                        if (['yes-no (synth under)', 'non-standard', 'yes-no', 'synth under'].includes(val)) {
+                            return 'demon';
                         }
+                        return 'standard';
+                    };
 
-                        // Headshot: keep URL if present, else Data ID (raw sheet layout)
+                    return (rawRows || []).map(r => {
+                        // Trust Odds Type first; fall back to Prop Type if present
+                        const odds = mapOdds(r['Odds Type'] || r['Prop Type'] || 'standard');
+
+                        // Headshot is now in the correct column
                         let headshot = (r['Headshot URL'] || '').toString().trim();
                         if (!headshot.startsWith('http')) {
-                            headshot = (r['Data ID'] || '').toString().trim();
+                            const alt = (r['Data ID'] || '').toString().trim();
+                            if (alt.startsWith('http')) headshot = alt;
                         }
 
-                        // For NFL/CFB: use Max No-Vig % as the primary Edge metric for all stats
-                        // EXCEPT Fantasy Score (which continues to use the calculated % Edge).
-                        // This gives a cleaner true-probability ranking for ranking/sorting/display.
+                        // Use Max No-Vig % as primary edge for all stats except Fantasy Score
                         const statTypeLower = (r['Stat Type'] || '').toString().toLowerCase().trim();
                         const isFantasyScore = statTypeLower.includes('fantasy score') || statTypeLower === 'fantasy' || statTypeLower.includes('fpts');
                         let edge;
                         if (isFantasyScore) {
                             edge = (r['Edge %'] || r['% Edge'] || '').toString().trim();
                         } else {
-                            // Prefer Max No-Vig %; fall back to % Edge / Edge % if missing
                             edge = (r['Max No-Vig %'] || r['Max No-Vig Diff'] || r['Edge %'] || r['% Edge'] || '').toString().trim();
                         }
 
