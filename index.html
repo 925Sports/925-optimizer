@@ -1376,7 +1376,8 @@
         // ==================== UTILS ====================
         function normalizeName(name) {
             if (!name) return '';
-            let n = name.toLowerCase()
+            let n = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
                 .replace(/[^a-z0-9\s]/g, ' ')           // keep spaces
                 .replace(/\s+/g, ' ')
                 .trim();
@@ -1399,8 +1400,9 @@
             if (n1.includes(n2) || n2.includes(n1)) return true;
 
             // Extra fuzzy: last name match if first names are close
-            const parts1 = logName.toLowerCase().split(/\s+/);
-            const parts2 = playerName.toLowerCase().split(/\s+/);
+            const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const parts1 = fold(logName).split(/\s+/);
+            const parts2 = fold(playerName).split(/\s+/);
             if (parts1.length > 1 && parts2.length > 1) {
                 const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
                 const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
@@ -1982,14 +1984,14 @@
             `;
 
             // ==================== GAME LOG CONFIG (Phase 2) ====================
-            // Priority: Local data/ folder > Remote URL
-            // For NBA game logs you are using Google Sheets — replace the nba.logs URL below with your published CSV link.
+            // NBA logs: 925Sports/nba-dfs-data nba_game_log.csv (2025-26 history + current 2026-27).
+            // That file is appended nightly from ESPN. The old published Sheet stops in June 2026.
             // MLB is using GitHub raw (as currently in play).
             const urls = {
                 nba: { 
                     pp: './data/prizepicks-nba.csv',
                     ppRemote: 'https://raw.githubusercontent.com/925Sports/prop-data/main/prizepicks-nba.csv',
-                    logs: './data/nba_game_logs.csv'
+                    logs: 'https://raw.githubusercontent.com/925Sports/nba-dfs-data/main/nba_game_log.csv'
                 },
                 wnba: { 
                     pp: './data/prizepicks-wnba.csv', 
@@ -2528,33 +2530,65 @@
                 return;
             }
 
-            // Try local first, then remote
-            const localUrl = `./data/${sport}_game_logs.csv`;
-            let gameLogText = '';
+            // NBA prefers the nightly GitHub CSV (includes 2026-27). A local file or the
+            // old Sheet (ends June 2026) is only a fallback.
+            const sources = sport === 'nba'
+                ? [
+                    'https://raw.githubusercontent.com/925Sports/nba-dfs-data/main/nba_game_log.csv',
+                    './data/nba_game_logs.csv',
+                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vR-ZvShRlEWJen3PKivCQF79zYZJkW04F00THnwUrD_xUPvq609FWXZaD6sf4SPJ9rBvTzzrusA8a3N/pub?gid=0&single=true&output=csv'
+                ]
+                : (sport === 'mlb'
+                    ? [
+                        './data/mlb_game_logs.csv',
+                        'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/refs/heads/main/mlb_2026_season_game_logs.csv'
+                    ]
+                    : [`./data/${sport}_game_logs.csv`]);
 
-            try {
-                const res = await fetch(localUrl);
-                if (res.ok) {
-                    gameLogText = await res.text();
-                } else {
-                    // Fallback to configured remote URL
-                    const remoteUrl = (sport === 'mlb') 
-                        ? 'https://raw.githubusercontent.com/925Sports/mlb-player-game-logs/refs/heads/main/mlb_2026_season_game_logs.csv'
-                        : (sport === 'nba' 
-                            ? 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR-ZvShRlEWJen3PKivCQF79zYZJkW04F00THnwUrD_xUPvq609FWXZaD6sf4SPJ9rBvTzzrusA8a3N/pub?gid=0&single=true&output=csv' 
-                            : './data/wnba_game_logs.csv');
-                    if (remoteUrl) {
-                        const remoteRes = await fetch(remoteUrl);
-                        if (remoteRes.ok) gameLogText = await remoteRes.text();
+            let gameLogText = '';
+            for (const url of sources) {
+                try {
+                    const day = new Date().toISOString().slice(0, 10);
+                    const bust = url.indexOf('nba-dfs-data') !== -1 ? (url + '?v=' + day) : url;
+                    const res = await fetch(bust, { cache: 'no-store' });
+                    if (!res.ok) continue;
+                    const text = await res.text();
+                    if (text && text.length > 80 && /PLAYER|fullName|Player Name/i.test(text.slice(0, 800))) {
+                        gameLogText = text;
+                        break;
                     }
+                } catch (e) {
+                    console.warn('Game log fetch failed', url, e);
                 }
-            } catch (e) {
-                console.warn(`Could not load game logs for ${sport}`, e);
             }
 
             if (gameLogText) {
                 store.gameLogs = Papa.parse(gameLogText, { header: true, skipEmptyLines: true }).data;
-                console.log(`Loaded ${store.gameLogs.length} game logs for ${sport}`);
+
+                if (sport === 'nba') {
+                    // ESPN abbreviations in the CSV don't match the optimizer's team map.
+                    const alias = { GS: 'GSW', NY: 'NYK', NO: 'NOP', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS', PHO: 'PHX', CHO: 'CHA', BRK: 'BKN' };
+                    const seasonStart = new Date(2026, 9, 1); // Oct 1, 2026
+                    let currentSeason = 0;
+                    store.gameLogs.forEach(log => {
+                        if ((log['3PM'] == null || log['3PM'] === '') && log['3sPM'] != null) log['3PM'] = log['3sPM'];
+                        if (log.TEAM) {
+                            const up = String(log.TEAM).trim().toUpperCase();
+                            log.TEAM = alias[up] || up;
+                        }
+                        if (log['MATCH UP']) {
+                            log['MATCH UP'] = String(log['MATCH UP']).replace(/\b[A-Za-z]{2,4}\b/g, function (m) {
+                                const up = m.toUpperCase();
+                                return alias[up] || m;
+                            });
+                        }
+                        const d = new Date(log['GAME DATE'] || log.gameDate || '');
+                        if (!isNaN(d) && d >= seasonStart) currentSeason++;
+                    });
+                    console.log('Loaded ' + store.gameLogs.length + ' NBA game logs (' + currentSeason + ' from 2026-27)');
+                } else {
+                    console.log(`Loaded ${store.gameLogs.length} game logs for ${sport}`);
+                }
 
                 // Build fast lookup cache: normalized name -> array of logs
                 store.playerLogCache = new Map();
@@ -4823,7 +4857,7 @@
 
                             logs.forEach(log => {
                                 const fg = `${log.FGM||0}/${log.FGA||0}`;
-                                const three = `${log['3PM']||log.threePointersMade||0}/${log['3PA']||0}`;
+                                const three = `${log['3PM']||log['3sPM']||log.threePointersMade||0}/${log['3PA']||0}`;
                                 const ft = `${log.FTM||0}/${log.FTA||0}`;
                                 const pm = log['Plus/Minus'] || log.plusMinus || 0;
                                 const matchUp = log['MATCH UP'] || log.MATCH_UP || log.opponent || log.Opp || log['Opp'] || '';
