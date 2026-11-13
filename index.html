@@ -183,6 +183,11 @@
                 box-shadow: 0 0 0 1px rgba(13,148,136,0.4);
                 color: #fff;
             }
+            .sport-tab[data-sport="cbb"]:hover:not(.active) {
+                background: linear-gradient(145deg, rgba(245,158,11,0.25), #1a1a1a);
+                box-shadow: 0 0 0 1px rgba(245,158,11,0.4);
+                color: #fff;
+            }
             .sport-tab[data-sport="nfl"]:hover:not(.active) {
                 background: linear-gradient(145deg, rgba(1,51,105,0.35), #1a1a1a);
                 box-shadow: 0 0 0 1px rgba(1,51,105,0.5);
@@ -388,6 +393,7 @@
         .sport-badge.soccer { background: #10b981; } /* emerald green for soccer */
         .sport-badge.nfl { background: #013369; } /* NFL navy */
         .sport-badge.cfb { background: #8B0000; } /* CFB crimson */
+        .sport-badge.cbb { background: #f59e0b; } /* CBB amber */
 
         /* Sport-colored headshot ring (lighter shades) - replaces text badge */
         .headshot-wrapper {
@@ -419,6 +425,7 @@
         .headshot-wrapper.soccer { --ring: linear-gradient(135deg, #5eead4, #0d9488); box-shadow: 0 0 0 1px rgba(13,148,136,0.25), 0 0 18px rgba(13,148,136,0.22); }
         .headshot-wrapper.nfl { --ring: linear-gradient(135deg, #60a5fa, #013369); box-shadow: 0 0 0 1px rgba(1,51,105,0.3), 0 0 18px rgba(1,51,105,0.25); }
         .headshot-wrapper.cfb { --ring: linear-gradient(135deg, #f87171, #8B0000); box-shadow: 0 0 0 1px rgba(139,0,0,0.3), 0 0 18px rgba(139,0,0,0.22); }
+        .headshot-wrapper.cbb { --ring: linear-gradient(135deg, #fbbf24, #f59e0b); box-shadow: 0 0 0 1px rgba(245,158,11,0.3), 0 0 18px rgba(245,158,11,0.22); }
 
         .headshot-wrapper .headshot {
             width: 100%;
@@ -1108,6 +1115,10 @@
                 <span class="icon">⚽</span>
                 <span>Soccer</span>
             </button>
+            <button class="sport-tab" data-sport="cbb">
+                <span class="icon">🏀</span>
+                <span>CBB</span>
+            </button>
             <button class="sport-tab active" data-sport="all">
                 <span class="icon">⋮⋮</span>
                 <span>All</span>
@@ -1313,7 +1324,8 @@
             mlb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
             nfl: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
             cfb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
-            soccer: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
+            soccer: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' },
+            cbb: { allData: [], gameLogs: [], playerLogCache: new Map(), selectedStatTypes: new Set(), currentOddsType: 'standard', currentView: 'cards', searchTerm: '', uniqueGames: [], uniqueTeams: [], uniqueCallouts: [], uniqueBetTags: [], selectedGames: new Set(), selectedTeams: new Set(), selectedCallouts: new Set(), selectedBetTags: new Set(), selectedFav: new Set(['Yes','No']), selectedGameTypes: new Set(['High','Normal','Low']), selectedHotCold: new Set(['Hot','Cold','Neutral']), showSelectedOnly: false, contentSortColumn: 'Edge', contentSortDirection: 'desc' }
         };
         let selectedBets = []; // SHARED across all sports
         let currentFiltered = [];
@@ -1767,8 +1779,8 @@
             const blk = parseFloat(log.BLK || log.blocks || 0);
             const tov = parseFloat(log.TOV || log.turnovers || 0);
             if (scoring === 'ud') {
-                // Underdog NBA/WNBA: 1 pt per counting stat, -1 TO (no extra AST/REB/STL/BLK weights)
-                return pts + reb + ast + stl + blk - tov;
+                // Underdog Pick'em NBA/WNBA Fantasy uses the same weights as PrizePicks
+                return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov;
             }
             // PrizePicks NBA/WNBA
             return pts + reb * 1.2 + ast * 1.5 + stl * 3 + blk * 3 - tov;
@@ -1861,15 +1873,15 @@
                 row._udLineAdjusted = adjusted;
                 return adjusted;
             }
+            // NBA / WNBA Fantasy Score uses identical scoring on Underdog Pick'em and PrizePicks
+            // (PTS 1, REB 1.2, AST 1.5, STL 3, BLK 3, TOV -1). No conversion or ratio is needed.
+            // Previous factor/ratio logic was incorrect and inflated lines ~1.15–1.20×.
+            if (sport === 'nba' || sport === 'wnba' || sport === 'cbb') {
+                return udLine;
+            }
             const ratio = ratioFromLogs(row, sport);
             if (ratio && isFinite(ratio) && ratio > 0.5 && ratio < 2.5) {
                 return udLine * ratio;
-            }
-            if (sport === 'nba' || sport === 'wnba') {
-                // Typical PP/UD ratio ~1.15–1.25 from extra AST/REB/STL/BLK weights
-                const pos = (row.Position || row.Pos || '').toUpperCase();
-                const factor = (pos.includes('G') || pos.includes('PG') || pos.includes('SG')) ? 1.20 : 1.15;
-                return udLine * factor;
             }
             if (sport === 'mlb') {
                 // Small positive PP adjustment (HBP + SB 5 vs 4, 2B 5 vs 6 nets near-zero; HBP/SB usually net +)
@@ -2087,6 +2099,12 @@
                 soccer: { 
                     pp: './data/prizepicks-soccer.csv', 
                     logs: ''  // No game logs CSV yet for soccer; Splits/Game Log tabs will show placeholder
+                },
+                cbb: {
+                    pp: './data/prizepicks-cbb.csv',
+                    ppRemote: 'https://raw.githubusercontent.com/925Sports/prop-data/main/prizepicks-cbb.csv',
+                    ppSheet: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQx_BIRvb4w8yfASiJAmasowTnHHrHZQbKyQ6G-Nc7t1Igzx1IH-SLiOizclSV8zgThZ9qMbu7fKclo/pub?gid=0&single=true&output=csv',
+                    logs: ''  // No game logs for CBB yet
                 }
             };
 
@@ -2177,10 +2195,11 @@
                     fetchCsvText('mlb'),
                     fetchCsvText('nfl'),
                     fetchCsvText('cfb'),
-                    fetchCsvText('soccer')
+                    fetchCsvText('soccer'),
+                    fetchCsvText('cbb')
                 ]);
 
-                const [nbaRes, wnbaRes, mlbRes, nflRes, cfbRes, soccerRes] = results;
+                const [nbaRes, wnbaRes, mlbRes, nflRes, cfbRes, soccerRes, cbbRes] = results;
 
                 if (nbaRes.status === 'fulfilled') dataStore.nba.allData = Papa.parse(nbaRes.value, { header: true, skipEmptyLines: true }).data;
                 if (wnbaRes.status === 'fulfilled') dataStore.wnba.allData = Papa.parse(wnbaRes.value, { header: true, skipEmptyLines: true }).data;
@@ -2194,14 +2213,15 @@
                     dataStore.cfb.allData = normalizeFootballRows(raw);
                 }
                 if (soccerRes.status === 'fulfilled') dataStore.soccer.allData = Papa.parse(soccerRes.value, { header: true, skipEmptyLines: true }).data;
+                if (cbbRes.status === 'fulfilled') dataStore.cbb.allData = Papa.parse(cbbRes.value, { header: true, skipEmptyLines: true }).data;
 
                 // Ensure odds type defaults to Standard on load
-                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(s => {
+                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(s => {
                     if (!dataStore[s].currentOddsType) dataStore[s].currentOddsType = 'standard';
                 });
 
                 // Prepare each sport
-                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(sport => prepareSportData(sport));
+                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(sport => prepareSportData(sport));
 
                 // Restore selectedBets from localStorage if any
                 try {
@@ -2224,7 +2244,7 @@
                 updateStandardBetsCount();
 
                 // Show welcome if no data
-                const totalRows = dataStore.nba.allData.length + dataStore.wnba.allData.length + dataStore.mlb.allData.length + dataStore.nfl.allData.length + dataStore.cfb.allData.length + dataStore.soccer.allData.length;
+                const totalRows = dataStore.nba.allData.length + dataStore.wnba.allData.length + dataStore.mlb.allData.length + dataStore.nfl.allData.length + dataStore.cfb.allData.length + dataStore.soccer.allData.length + dataStore.cbb.allData.length;
                 if (totalRows === 0) {
                     contentDiv.innerHTML = '<div class="loading" style="color:#f59e0b; max-width: 520px; margin: 40px auto; line-height: 1.5;">No prop data loaded.<br><br><strong>How to set up your data:</strong><br>1. Put prop CSVs (nba/wnba/mlb/nfl/cfb/soccer) in a <code>data/</code> folder<br>2. Or rely on the published Google Sheet links for NFL/CFB<br>3. Refresh the page<br><br>Game logs load on-demand when you open a player.</div>';
                 }
@@ -2594,7 +2614,7 @@
             if (store.gameLogs && store.gameLogs.length > 0) return; // already loaded
 
             // NFL / CFB / Soccer: no game log CSVs yet — skip network calls
-            if (sport === 'nfl' || sport === 'cfb' || sport === 'soccer') {
+            if (sport === 'nfl' || sport === 'cfb' || sport === 'soccer' || sport === 'cbb') {
                 store.gameLogs = store.gameLogs || [];
                 return;
             }
@@ -2770,7 +2790,7 @@
 
             // Recompute current filtered count (lightweight)
             let allRows = [];
-            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(s => {
+            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
                     allRows.push({ ...row, _sport: s });
                 });
@@ -2814,7 +2834,7 @@
             if (isAll) {
                 // Combine data from all sports for stat type tabs on "All" view
                 data = [];
-                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(s => {
+                ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(s => {
                     if (dataStore[s] && dataStore[s].allData) {
                         data = data.concat(dataStore[s].allData);
                     }
@@ -3574,6 +3594,7 @@
             else if (sport === 'nfl') headshotRingClass = 'nfl';
             else if (sport === 'cfb') headshotRingClass = 'cfb';
             else if (sport === 'soccer') headshotRingClass = 'soccer';
+            else if (sport === 'cbb') headshotRingClass = 'cbb';
 
             const key = `${playerName}-${statType}`;
             const selected = selectedBets.find(b => b.key === key && b.sport === sport);
@@ -3693,7 +3714,7 @@
             if (!el) return;
 
             let count = 0;
-            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(sport => {
+            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(sport => {
                 const data = dataStore[sport]?.allData || [];
                 count += data.filter(row => (row['Odds Type'] || 'standard').toLowerCase() === 'standard').length;
             });
@@ -3708,7 +3729,7 @@
             contentDiv.style.cssText = 'max-width: 1400px; margin: 0 auto; padding: 0 24px;';
 
             let allRows = [];
-            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer'].forEach(s => {
+            ['nba', 'wnba', 'mlb', 'nfl', 'cfb', 'soccer', 'cbb'].forEach(s => {
                 (dataStore[s].allData || []).forEach(row => {
                     allRows.push({ ...row, _sport: s });
                 });
@@ -4696,7 +4717,7 @@
                     { name: 'Total Proj', value: parseFloat(row['Total Projection'] || row.Total || 0) },
                     { name: 'True Avg Line', value: parseFloat(row['True Average Line'] || row['True Avg Line'] || 0) },
                     { name: 'Line', value: parseFloat(row['Line Score'] || row.Line || 0) },
-                    { name: 'UD Line', value: (getUnderdogLine(row) || 0) }
+                    { name: 'UD Line', value: (getRawUnderdogLine(row) || 0) } // Always raw for basketball; no PP/UD conversion
                 ].filter(p => p.value > 0);
 
                 // Sort from highest to lowest (as requested)
@@ -4798,7 +4819,7 @@
                 }, 30);
 
             } else if (tab === 'Game Log') {
-                if (sport === 'soccer' || sport === 'nfl' || sport === 'cfb') {
+                if (sport === 'soccer' || sport === 'nfl' || sport === 'cfb' || sport === 'cbb') {
                     const label = sport.toUpperCase();
                     content.innerHTML = `
                         <div style="padding:24px 16px; text-align:center; color:#888; max-width:420px; margin:0 auto;">
@@ -4975,7 +4996,7 @@
                 }, 60);
 
             } else if (tab === 'Splits') {
-                if (sport === 'soccer' || sport === 'nfl' || sport === 'cfb') {
+                if (sport === 'soccer' || sport === 'nfl' || sport === 'cfb' || sport === 'cbb') {
                     const label = sport.toUpperCase();
                     content.innerHTML = `
                         <div style="padding:24px 16px; text-align:center; color:#888; max-width:420px; margin:0 auto;">
@@ -5434,6 +5455,12 @@
                 row._udLineAdjusted = adjusted;
                 return adjusted;
             }
+            // Basketball fantasy scores: no adjustment (identical scoring on PP and UD)
+            if (isFantasyStat(row['Stat Type']) && (sport === 'nba' || sport === 'wnba' || sport === 'cbb')) {
+                row._udLineRaw = num;
+                row._udLineAdjusted = num;
+                return num;
+            }
             if (isFantasyStat(row['Stat Type'])) {
                 const adjusted = adjustUnderdogFantasyLine(num, row, sport);
                 row._udLineRaw = num;
@@ -5446,7 +5473,7 @@
         // ==================== FILTER POPUPS ====================
         function showFilterPopup() {
             if (currentSport === 'all') { 
-                showToast('Game/Team filters only work on individual sport tabs. Please click a specific sport (NBA, WNBA, MLB, NFL, CFB, Soccer) first.', 'warning');
+                showToast('Game/Team filters only work on individual sport tabs. Please click a specific sport (NBA, WNBA, CBB, MLB, NFL, CFB, Soccer) first.', 'warning');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -5509,7 +5536,7 @@
 
         function showCalloutFilterPopup() {
             if (currentSport === 'all') { 
-                showToast('Callout filters only work on individual sport tabs. Please click a specific sport (NBA, WNBA, MLB, NFL, CFB, Soccer) first.', 'warning');
+                showToast('Callout filters only work on individual sport tabs. Please click a specific sport (NBA, WNBA, CBB, MLB, NFL, CFB, Soccer) first.', 'warning');
                 return; 
             }
             const store = dataStore[currentSport];
@@ -5924,7 +5951,7 @@
                 <!-- Content: How to Use -->
                 <div id="content-howto">
                     <ul style="line-height:1.65; font-size:14px; padding-left:20px;">
-                        <li>Switch between <strong>NBA • WNBA • MLB • NFL • CFB • Soccer • All</strong> using the top tabs.</li>
+                        <li>Switch between <strong>NBA • WNBA • CBB • MLB • NFL • CFB • Soccer • All</strong> using the top tabs.</li>
                         <li>Each sport works independently with its own filters and stat tabs.</li>
                         <li>Click <strong>More</strong> or <strong>Less</strong> on any card — bets from ALL sports go into one shared Bet Slip.</li>
                         <li>Use the <strong>Bet Slips</strong> button (top right) to review your selections and generate parlay combinations.</li>
