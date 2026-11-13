@@ -47,6 +47,12 @@ jobs:
           curl -L -o data/prizepicks-soccer.csv \
             "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9cof5aKuKsPbVlQ8rvoVrF2-ROXq096CrSIxIOO9swtl3smSUJ2JOtNcbdpX46RVx1HuqdIGeY57S/pub?gid=0&single=true&output=csv"
 
+      # ==================== CBB ====================
+      - name: Fetch CBB PrizePicks Data
+        run: |
+          curl -L -o data/prizepicks-cbb.csv \
+            "https://docs.google.com/spreadsheets/d/e/2PACX-1vQx_BIRvb4w8yfASiJAmasowTnHHrHZQbKyQ6G-Nc7t1Igzx1IH-SLiOizclSV8zgThZ9qMbu7fKclo/pub?gid=0&single=true&output=csv"
+
       # ==================== NFL ====================
       - name: Fetch + Normalize NFL PrizePicks Data
         run: |
