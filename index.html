@@ -1397,18 +1397,91 @@
             const n2 = normalizeName(playerName);
             if (!n1 || !n2) return false;
             if (n1 === n2) return true;
-            if (n1.includes(n2) || n2.includes(n1)) return true;
+            // Substring match only if the shorter one is reasonably long (avoids "jo" matching "jordan")
+            const shorter = n1.length < n2.length ? n1 : n2;
+            const longer = n1.length < n2.length ? n2 : n1;
+            if (shorter.length >= 4 && longer.includes(shorter)) return true;
 
-            // Extra fuzzy: last name match if first names are close
-            const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            const parts1 = fold(logName).split(/\s+/);
-            const parts2 = fold(playerName).split(/\s+/);
+            // Last name match ONLY if first names are similar (initial, prefix, or close)
+            const fold = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+            const parts1 = fold(logName).split(/\s+/).filter(Boolean);
+            const parts2 = fold(playerName).split(/\s+/).filter(Boolean);
             if (parts1.length > 1 && parts2.length > 1) {
-                const last1 = parts1[parts1.length - 1].replace(/[^a-z]/g, '');
-                const last2 = parts2[parts2.length - 1].replace(/[^a-z]/g, '');
-                if (last1 && last2 && last1 === last2) return true;
+                const last1 = parts1[parts1.length - 1];
+                const last2 = parts2[parts2.length - 1];
+                if (last1 && last2 && last1 === last2 && last1.length >= 3) {
+                    const first1 = parts1[0];
+                    const first2 = parts2[0];
+                    if (!first1 || !first2) return false;
+                    // Shared first initial + reasonable length overlap or prefix
+                    if (first1[0] === first2[0]) {
+                        const minLen = Math.min(first1.length, first2.length);
+                        if (minLen >= 2 && (first1.startsWith(first2.slice(0, Math.min(3, first2.length))) || first2.startsWith(first1.slice(0, Math.min(3, first1.length))))) {
+                            return true;
+                        }
+                        // Close length and same start
+                        if (Math.abs(first1.length - first2.length) <= 2 && first1.slice(0, 2) === first2.slice(0, 2)) return true;
+                    }
+                    // One is abbreviation of the other (e.g. "KJ" vs "K.J." already normalized, or "AJ" vs "A.J.")
+                    if ((first1.length <= 3 && first2.startsWith(first1)) || (first2.length <= 3 && first1.startsWith(first2))) return true;
+                }
             }
             return false;
+        }
+
+        /**
+         * Get the best-matching game logs for a player.
+         * Prefers exact normalized cache hit, then falls back to fuzzy nameMatches
+         * and picks the closest match when multiple candidates exist.
+         */
+        function getPlayerLogs(sport, playerName) {
+            const store = dataStore[sport];
+            if (!store || !store.gameLogs || !store.gameLogs.length) return [];
+
+            const normTarget = normalizeName(playerName);
+            if (!normTarget) return [];
+
+            // Fast path: exact cache
+            if (store.playerLogCache && store.playerLogCache.has(normTarget)) {
+                return store.playerLogCache.get(normTarget) || [];
+            }
+
+            // Fuzzy path
+            const byNorm = new Map();
+            for (const log of store.gameLogs) {
+                const raw = log.PLAYER || log['Player Name'] || log.fullName || log['fullName'] || log.Name || '';
+                if (!raw) continue;
+                if (nameMatches(raw, playerName)) {
+                    const n = normalizeName(raw);
+                    if (!n) continue;
+                    if (!byNorm.has(n)) byNorm.set(n, []);
+                    byNorm.get(n).push(log);
+                }
+            }
+
+            if (byNorm.size === 0) return [];
+            if (byNorm.size === 1) return Array.from(byNorm.values())[0];
+
+            // Multiple candidates: score and pick best
+            let bestScore = -Infinity;
+            let best = [];
+            for (const [n, logs] of byNorm) {
+                let score = 0;
+                if (n === normTarget) score = 100;
+                else if (n.includes(normTarget) || normTarget.includes(n)) score = 70;
+                else {
+                    // Character overlap score
+                    let matches = 0;
+                    const len = Math.min(n.length, normTarget.length);
+                    for (let i = 0; i < len; i++) if (n[i] === normTarget[i]) matches++;
+                    score = matches;
+                }
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = logs;
+                }
+            }
+            return best;
         }
 
         // ==================== GAME / TEAM CANONICALIZATION ====================
@@ -1742,11 +1815,7 @@
             const store = dataStore[sport] || dataStore[row._sport];
             if (!store) return null;
             const playerName = row['Player Name'] || '';
-            const norm = normalizeName(playerName);
-            let logs = store.playerLogCache?.get(norm) || [];
-            if (!logs.length && store.gameLogs?.length) {
-                logs = store.gameLogs.filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
-            }
+            let logs = getPlayerLogs(sport, playerName);
             if (!logs.length) return null;
             let ppSum = 0, udSum = 0, n = 0;
             logs.slice(0, 20).forEach(log => {
@@ -3165,14 +3234,7 @@
                     const storeForCache = dataStore[currentSport];
                     filtered.forEach(row => {
                         const playerName = row['Player Name'];
-                        const normPlayer = normalizeName(playerName);
-                        let playerLogs = storeForCache.playerLogCache?.get(normPlayer) || [];
-                        if (playerLogs.length === 0 && storeForCache.gameLogs?.length) {
-                            // Fallback (should rarely happen)
-                            playerLogs = storeForCache.gameLogs.filter(log => 
-                                nameMatches(log.fullName || log['fullName'] || log['Player Name'] || log.PLAYER || '', playerName)
-                            );
-                        }
+                        let playerLogs = getPlayerLogs(currentSport, playerName);
                         playerLogs = [...playerLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                         
                         // FIX for pitcher game logs in table L5/L20: only use actual pitching appearances for pitcher props
@@ -3794,16 +3856,8 @@
                     tdPPUD.setAttribute('data-label', 'PP vs UD');
                     tr.appendChild(tdPPUD);
 
-                    // Calculate L5 and L20 using the fast playerLogCache (much faster than filter+sort every row)
-                    const normPlayer = normalizeName(row['Player Name'] || '');
-                    let playerLogs = (dataStore[row._sport]?.playerLogCache?.get(normPlayer) || []);
-                    
-                    // Fallback to nameMatches scan only if cache miss (should be rare)
-                    if (playerLogs.length === 0 && dataStore[row._sport]?.gameLogs?.length) {
-                        playerLogs = dataStore[row._sport].gameLogs.filter(l => 
-                            nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', row['Player Name'] || '')
-                        );
-                    }
+                    // Calculate L5 and L20 using improved player log matching
+                    let playerLogs = getPlayerLogs(row._sport, row['Player Name'] || '');
                     // Ensure sorted newest first
                     playerLogs = [...playerLogs].sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || 0) - new Date(a['GAME DATE'] || a.gameDate || 0));
 
@@ -4082,7 +4136,7 @@
             // Initial L5 (will be '-' until game logs load in background)
             let l5Avg = '-';
             let l5HitPct = '-';
-            const logsForL5 = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+            const logsForL5 = getPlayerLogs(sport, playerName);
             if (logsForL5.length > 0) {
                 const sortedLogs = [...logsForL5].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                 const last5 = sortedLogs.slice(0, 5);
@@ -4121,7 +4175,7 @@
                     // Recompute L5 stats now that logs are loaded
                     let newL5Avg = '-';
                     let newL5HitPct = '-';
-                    const freshLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    const freshLogs = getPlayerLogs(sport, playerName);
                     if (freshLogs.length > 0) {
                         const sorted = [...freshLogs].sort((a, b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
                         const last5Logs = sorted.slice(0, 5);
@@ -4754,7 +4808,7 @@
                     `;
                     return;
                 }
-                let logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                let logs = getPlayerLogs(sport, playerName);
                 logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
                 // Properly pull pitcher game logs: only include rows that actually contain pitching statistics for this player.
@@ -4774,7 +4828,7 @@
 
                 let html = `<h4 style="margin:4px 0 8px;">Recent Game Log (${logs.length} games) — Most Recent First</h4>`;
                 if (logs.length === 0) {
-                    html += `<p style="color:#888;">No game log data available for this player in the loaded CSV.</p>`;
+                    html += `<p style="color:#888;">No matching game logs found for <strong>${playerName}</strong>. This can happen if the name format differs slightly from the game log source or if data for this player isn't included yet. Try another player or refresh.</p>`;
                 } else {
                     html += `<input type="text" id="gameLogSearch" placeholder="Filter by opponent...">`;
                     html += `<div class="table-wrapper"><table id="gameLogTable" style="font-size:12px;"><thead><tr>`;
@@ -4933,7 +4987,7 @@
                 }
                 if (sport === 'nba') {
                     // ========== FULL RICH NBA SPLITS CHART (matching your original NBA tool + desired image) ==========
-                    let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    let playerLogs = getPlayerLogs(sport, playerName);
                     playerLogs.sort((a, b) => new Date(b['GAME DATE'] || b.gameDate || b.date || 0) - new Date(a['GAME DATE'] || a.gameDate || a.date || 0));
                     const recentLogs = playerLogs.slice(0, 20);
 
@@ -5107,7 +5161,7 @@
 
                 } else if (sport === 'mlb') {
                     // ========== EXACT MLB SPLITS LOGIC (copied and adapted from MLB code) ==========
-                    let playerLogs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    let playerLogs = getPlayerLogs(sport, playerName);
                     
                     // FIX: Use robust isPitchingAppearance for Splits MLB pitcher props
                     const isHitter = !(row.Position || row.Pos || '').toUpperCase().includes('P') && !row['Stat Type'].toLowerCase().includes('pitcher');
@@ -5218,7 +5272,7 @@
 
                 } else {
                     // NBA / WNBA - keep the table-based splits (already improved)
-                    const logs = (dataStore[sport].gameLogs || []).filter(l => nameMatches(l.fullName || l['fullName'] || l['Player Name'] || l.PLAYER || '', playerName));
+                    const logs = getPlayerLogs(sport, playerName);
                     logs.sort((a,b) => new Date(b.gameDate || b['GAME DATE'] || b.date || 0) - new Date(a.gameDate || a['GAME DATE'] || a.date || 0));
 
                     const line = parseFloat(row['Line Score'] || row.Line || 0);
